@@ -423,7 +423,7 @@
         const timeoutId = setTimeout(() => {
           cleanup();
           reject("REQUEST_TIMEOUT");
-        }, 8000);
+        }, 20000);
 
         function cleanup() {
           clearTimeout(timeoutId);
