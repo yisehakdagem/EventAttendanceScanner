@@ -332,280 +332,239 @@
   </div>
 
   <div id="error-banner-container"></div>
+<script>
+  const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzRQYi29sudHW3Ijq327xzFD7YnUHplUlDXTlnsz4rJ2ovObQURDFXlRtKValOLG2c3/exec";
 
-  <script>
-    const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzRQYi29sudHW3Ijq327xzFD7YnUHplUlDXTlnsz4rJ2ovObQURDFXlRtKValOLG2c3/exec";
+  const statusDiv = document.getElementById("status");
+  const statusModal = document.getElementById("statusModal");
+  const modalIcon = document.getElementById("modalIcon");
+  const modalTitle = document.getElementById("modalTitle");
+  const modalMsg = document.getElementById("modalMsg");
+  const modalActions = document.getElementById("modalActions");
+  const btnCancel = document.getElementById("btnCancel");
 
-    const statusDiv = document.getElementById("status");
-    const statusModal = document.getElementById("statusModal");
-    const modalIcon = document.getElementById("modalIcon");
-    const modalTitle = document.getElementById("modalTitle");
-    const modalMsg = document.getElementById("modalMsg");
-    const modalActions = document.getElementById("modalActions");
-    const btnCancel = document.getElementById("btnCancel");
+  let html5QrCode;
+  let isProcessing = false;
+  let currentRegId = "";
 
-    let html5QrCode;
-    let isProcessing = false;
-    let currentRegId = "";
+  const scannedRecords = [];
 
-    const scannedRecords = [];
-    const fifoQueue = [];
-    let isProcessingQueue = false;
+  function showLoadingModal() {
+    modalIcon.innerHTML = `<div class="spinner"></div>`;
+    modalTitle.innerText = "Processing Check-In";
+    modalMsg.innerText = "Updating attendance database...";
+    modalActions.style.display = "none";
+    statusModal.classList.add("active");
+  }
 
-    function showLoadingModal() {
-      modalIcon.innerHTML = `<div class="spinner"></div>`;
-      modalTitle.innerText = "Checking ID";
-      modalMsg.innerText = "Verifying database...";
-      modalActions.style.display = "none";
-      statusModal.classList.add("active");
+  function showResultModal(message, isSuccess, title = null) {
+    if (isSuccess) {
+      modalIcon.innerHTML = `
+        <div class="icon-circle success">
+          <svg viewBox="0 0 24 24" fill="#34d399" width="32" height="32"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+        </div>`;
+      modalTitle.innerText = title || "Success";
+      btnCancel.style.display = "block";
+    } else {
+      modalIcon.innerHTML = `
+        <div class="icon-circle error">
+          <svg viewBox="0 0 24 24" fill="#f87171" width="32" height="32"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 13.41 12z"/></svg>
+        </div>`;
+      modalTitle.innerText = title || "Notice";
+      btnCancel.style.display = "none";
     }
 
-    function showResultModal(message, isSuccess) {
-      if (isSuccess) {
-        modalIcon.innerHTML = `
-          <div class="icon-circle success">
-            <svg viewBox="0 0 24 24" fill="#34d399" width="32" height="32"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
-          </div>`;
-        modalTitle.innerText = "Success";
-        btnCancel.style.display = "block";
-      } else {
-        modalIcon.innerHTML = `
-          <div class="icon-circle error">
-            <svg viewBox="0 0 24 24" fill="#f87171" width="32" height="32"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
-          </div>`;
-        modalTitle.innerText = "Notice";
-        btnCancel.style.display = "none";
+    modalMsg.innerText = message;
+    modalActions.style.display = "flex";
+  }
+
+  function closeModalAndResume() {
+    statusModal.classList.remove("active");
+    if (html5QrCode) {
+      try { html5QrCode.resume(); } catch (e) {}
+    }
+    statusDiv.innerText = "Ready for next scan...";
+    statusDiv.className = "status-box";
+    isProcessing = false;
+    currentRegId = "";
+  }
+
+  async function cancelAttendance() {
+    if (!currentRegId) {
+      closeModalAndResume();
+      return;
+    }
+
+    const recordIdx = scannedRecords.findIndex(r => r.id === currentRegId);
+    if (recordIdx !== -1) scannedRecords.splice(recordIdx, 1);
+
+    showResultModal("Removing attendance entry...", false, "Undoing");
+
+    try {
+      await sendCheckInRequest(currentRegId, "undo");
+    } catch (err) {}
+
+    setTimeout(() => {
+      closeModalAndResume();
+    }, 1000);
+  }
+
+  function sendCheckInRequest(regId, action = "process") {
+    return new Promise((resolve, reject) => {
+      const callbackName = "jsonp_cb_" + Date.now() + "_" + Math.floor(Math.random() * 10000);
+      const script = document.createElement("script");
+
+      const timeoutId = setTimeout(() => {
+        cleanup();
+        reject("REQUEST_TIMEOUT");
+      }, 20000);
+
+      function cleanup() {
+        clearTimeout(timeoutId);
+        if (window[callbackName]) delete window[callbackName];
+        if (script.parentNode) script.parentNode.removeChild(script);
       }
 
-      modalMsg.innerText = message;
-      modalActions.style.display = "flex";
-    }
+      window[callbackName] = function(data) {
+        cleanup();
+        resolve(data);
+      };
 
-    function closeModalAndResume() {
-      statusModal.classList.remove("active");
-      if (html5QrCode) {
-        try { html5QrCode.resume(); } catch (e) {}
-      }
-      statusDiv.innerText = "Ready for next scan...";
-      statusDiv.className = "status-box";
-      isProcessing = false;
-      currentRegId = "";
-    }
+      script.onerror = function() {
+        cleanup();
+        reject("Network connection failed");
+      };
 
-    async function cancelAttendance() {
-      if (!currentRegId) {
-        closeModalAndResume();
-        return;
-      }
-
-      const recordIdx = scannedRecords.findIndex(r => r.id === currentRegId);
-      if (recordIdx !== -1) scannedRecords.splice(recordIdx, 1);
-
-      const queueIdx = fifoQueue.findIndex(item => item.id === currentRegId);
-      if (queueIdx !== -1) fifoQueue.splice(queueIdx, 1);
-
-      showResultModal("Removing attendance entry...", false);
-
-      try {
-        await sendCheckInRequest(currentRegId, "undo");
-      } catch (err) {}
-
-      setTimeout(() => {
-        closeModalAndResume();
-      }, 1000);
-    }
-
-    function sendCheckInRequest(regId, action = "check") {
-      return new Promise((resolve, reject) => {
-        const callbackName = "jsonp_cb_" + Date.now() + "_" + Math.floor(Math.random() * 10000);
-        const script = document.createElement("script");
-
-        const timeoutId = setTimeout(() => {
-          cleanup();
-          reject("REQUEST_TIMEOUT");
-        }, 20000);
-
-        function cleanup() {
-          clearTimeout(timeoutId);
-          if (window[callbackName]) delete window[callbackName];
-          if (script.parentNode) script.parentNode.removeChild(script);
-        }
-
-        window[callbackName] = function(data) {
-          cleanup();
-          resolve(data);
-        };
-
-        script.onerror = function() {
-          cleanup();
-          reject("Network connection failed");
-        };
-
-        script.src = `${APPS_SCRIPT_URL}?id=${encodeURIComponent(regId)}&action=${action}&callback=${callbackName}&_=${Date.now()}`;
-        document.body.appendChild(script);
-      });
-    }
-
-    async function onScanSuccess(decodedText) {
-      if (isProcessing) return;
-      isProcessing = true;
-
-      if (html5QrCode) {
-        try { html5QrCode.pause(); } catch (e) {}
-      }
-
-      showLoadingModal();
-
-      let regId = decodedText.trim();
-      if (regId.includes("id=")) {
-        regId = regId.split("id=")[1].split("&")[0];
-      }
-
-      currentRegId = regId;
-
-      try {
-        const response = await sendCheckInRequest(regId, "check");
-        handleCheckInResponse(response, regId);
-      } catch (err) {
-        if (err === "REQUEST_TIMEOUT") {
-          closeModalAndResume();
-          showNotificationBanner(`Lookup timed out for ${regId}. Retrying in background...`, "error");
-          
-          sendCheckInRequest(regId, "check")
-            .then(res => {
-              if (checkIsSuccessful(res)) {
-                showNotificationBanner(`Success: ID ${regId} verified after timeout!`, "success");
-              }
-            })
-            .catch(() => {});
-        } else {
-          showResultModal(`Verification error: ${err}`, false);
-        }
-      }
-    }
-
-    function checkIsSuccessful(response) {
-      if (!response) return false;
-      if (response.success === true || response.marked === true) return true;
-      if (typeof response.status === "string") {
-        const st = response.status.toLowerCase();
-        if (st === "success" || st === "already_marked" || st === "marked" || st === "ok") return true;
-      }
-      return false;
-    }
-
-    function handleCheckInResponse(response, regId) {
-      const isSuccess = checkIsSuccessful(response);
-
-      if (isSuccess) {
-        const timestamp = new Date().toISOString();
-        const personName = response.name || response.studentName || "Student";
-        const verifiedId = response.id || regId;
-
-        scannedRecords.push({ id: verifiedId, name: personName, timestamp: timestamp });
-        fifoQueue.push({ id: verifiedId, name: personName, retries: 0 });
-        processQueue();
-
-        showResultModal("Success", true);
-      } else {
-        const msg = (response && response.message) ? response.message : `ID ${regId} not found.`;
-        showResultModal(msg, false);
-      }
-    }
-
-    async function processQueue() {
-      if (isProcessingQueue || fifoQueue.length === 0) return;
-      isProcessingQueue = true;
-
-      const item = fifoQueue[0];
-
-      try {
-        const response = await sendCheckInRequest(item.id, "process");
-        if (checkIsSuccessful(response)) {
-          fifoQueue.shift();
-        } else {
-          throw new Error();
-        }
-      } catch (err) {
-        item.retries++;
-        if (item.retries >= 2) {
-          fifoQueue.shift();
-        }
-      } finally {
-        isProcessingQueue = false;
-        if (fifoQueue.length > 0) {
-          processQueue();
-        }
-      }
-    }
-
-    function showNotificationBanner(message, type = "error") {
-      const container = document.getElementById("error-banner-container");
-      const banner = document.createElement("div");
-      banner.className = `alert-banner ${type}`;
-      banner.innerHTML = `
-        <span>${type === 'success' ? '✅' : '⚠️'} ${message}</span>
-        <button class="close-btn" onclick="this.parentElement.remove()">✕</button>
-      `;
-      container.appendChild(banner);
-
-      setTimeout(() => {
-        if (banner.parentNode) banner.parentNode.removeChild(banner);
-      }, 6000);
-    }
-
-    function exportScannedCSV() {
-      if (!scannedRecords || scannedRecords.length === 0) {
-        alert("No scanned records available to export yet.");
-        return;
-      }
-
-      let csvRows = ["ID,Name,Scan Timestamp"];
-      scannedRecords.forEach(row => {
-        const safeName = (row.name || "Student").replace(/"/g, '""');
-        csvRows.push(`"${row.id}","${safeName}","${row.timestamp}"`);
-      });
-
-      const blob = new Blob([csvRows.join("\n")], { type: "text/csv;charset=utf-8;" });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.setAttribute("href", url);
-      link.setAttribute("download", `attendance_scans_${new Date().toISOString().slice(0,10)}.csv`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-    }
-
-    async function startCamera() {
-      html5QrCode = new Html5Qrcode("reader");
-      const config = { fps: 15, qrbox: { width: 220, height: 220 }, aspectRatio: 1.0 };
-
-      try {
-        await html5QrCode.start({ facingMode: { exact: "environment" } }, config, onScanSuccess);
-        statusDiv.innerText = "Ready to scan...";
-      } catch (e1) {
-        try {
-          await html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess);
-          statusDiv.innerText = "Ready to scan...";
-        } catch (e2) {
-          statusDiv.innerText = "Camera permission denied";
-          statusDiv.className = "status-box error";
-        }
-      }
-    }
-
-    startCamera();
-
-    document.getElementById("hidden-file-input").addEventListener("change", (e) => {
-      if (e.target.files.length === 0) return;
-      html5QrCode.scanFile(e.target.files[0], true)
-        .then(onScanSuccess)
-        .catch(() => {
-          statusDiv.innerText = "Failed to parse QR file";
-          statusDiv.className = "status-box error";
-        });
+      script.src = `${APPS_SCRIPT_URL}?id=${encodeURIComponent(regId)}&action=${action}&callback=${callbackName}&_=${Date.now()}`;
+      document.body.appendChild(script);
     });
-  </script>
+  }
+
+  async function onScanSuccess(decodedText) {
+    if (isProcessing) return;
+    isProcessing = true;
+
+    if (html5QrCode) {
+      try { html5QrCode.pause(); } catch (e) {}
+    }
+
+    showLoadingModal();
+
+    let regId = decodedText.trim();
+    if (regId.includes("id=")) {
+      regId = regId.split("id=")[1].split("&")[0];
+    }
+
+    currentRegId = regId;
+
+    try {
+      // Execute direct process call to record attendance in one step
+      const response = await sendCheckInRequest(regId, "process");
+      handleCheckInResponse(response, regId);
+    } catch (err) {
+      if (err === "REQUEST_TIMEOUT") {
+        closeModalAndResume();
+        showNotificationBanner(`Check-in timed out for ID ${regId}. Please try scanning again.`, "error");
+      } else {
+        showResultModal(`Connection error: ${err}`, false);
+      }
+    }
+  }
+
+  function handleCheckInResponse(response, regId) {
+    // 1. Explicit Duplicate Catch
+    if (response && response.alreadyCheckedIn === true) {
+      const msg = response.message || `ID ${regId} has already been checked in today.`;
+      showResultModal(msg, false, "Already Checked In");
+      return;
+    }
+
+    // 2. Pure Success Catch
+    if (response && response.success === true) {
+      const timestamp = new Date().toISOString();
+      const personName = response.name || "Student";
+      const verifiedId = response.id || regId;
+
+      scannedRecords.push({ id: verifiedId, name: personName, timestamp: timestamp });
+
+      const successMsg = response.message || `Attendance marked for ${personName}`;
+      showResultModal(successMsg, true, "Success");
+      return;
+    }
+
+    // 3. Fallback Error Catch
+    const errorMsg = (response && response.message) ? response.message : `Failed to process ID ${regId}.`;
+    showResultModal(errorMsg, false, "Error");
+  }
+
+  function showNotificationBanner(message, type = "error") {
+    const container = document.getElementById("error-banner-container");
+    const banner = document.createElement("div");
+    banner.className = `alert-banner ${type}`;
+    banner.innerHTML = `
+      <span>${type === 'success' ? '✅' : '⚠️'} ${message}</span>
+      <button class="close-btn" onclick="this.parentElement.remove()">✕</button>
+    `;
+    container.appendChild(banner);
+
+    setTimeout(() => {
+      if (banner.parentNode) banner.parentNode.removeChild(banner);
+    }, 6000);
+  }
+
+  function exportScannedCSV() {
+    if (!scannedRecords || scannedRecords.length === 0) {
+      alert("No scanned records available to export yet.");
+      return;
+    }
+
+    let csvRows = ["ID,Name,Scan Timestamp"];
+    scannedRecords.forEach(row => {
+      const safeName = (row.name || "Student").replace(/"/g, '""');
+      csvRows.push(`"${row.id}","${safeName}","${row.timestamp}"`);
+    });
+
+    const blob = new Blob([csvRows.join("\n")], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `attendance_scans_${new Date().toISOString().slice(0,10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
+
+  async function startCamera() {
+    html5QrCode = new Html5Qrcode("reader");
+    const config = { fps: 15, qrbox: { width: 220, height: 220 }, aspectRatio: 1.0 };
+
+    try {
+      await html5QrCode.start({ facingMode: { exact: "environment" } }, config, onScanSuccess);
+      statusDiv.innerText = "Ready to scan...";
+    } catch (e1) {
+      try {
+        await html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess);
+        statusDiv.innerText = "Ready to scan...";
+      } catch (e2) {
+        statusDiv.innerText = "Camera permission denied";
+        statusDiv.className = "status-box error";
+      }
+    }
+  }
+
+  startCamera();
+
+  document.getElementById("hidden-file-input").addEventListener("change", (e) => {
+    if (e.target.files.length === 0) return;
+    html5QrCode.scanFile(e.target.files[0], true)
+      .then(onScanSuccess)
+      .catch(() => {
+        statusDiv.innerText = "Failed to parse QR file";
+        statusDiv.className = "status-box error";
+      });
+  });
+</script>
+  
 </body>
 </html>
