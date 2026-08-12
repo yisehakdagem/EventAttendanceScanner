@@ -346,7 +346,7 @@
       const timeoutId = setTimeout(() => {
            cleanup();
            reject("Request timed out (Check Google Sheet)");
-       }, 12000);
+       }, 20000);
 
         function cleanup() {
           clearTimeout(timeoutId);
