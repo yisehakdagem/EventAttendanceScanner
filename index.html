@@ -3,576 +3,139 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>AYAC 2026 — Attendance Scanner</title>
-  <meta name="description" content="AYAC 2026 event attendance check-in system powered by QR scanning and hardware barcode readers.">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <title>Attendance Scanner</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
-
   <style>
-    /* =========================================================
-       Design Tokens
-    ========================================================= */
     :root {
-      --bg:           #07090f;
-      --surface-0:    #0e1220;
-      --surface-1:    #151d30;
-      --surface-2:    #1c2740;
-      --border:       rgba(255,255,255,0.07);
-      --border-hi:    rgba(255,255,255,0.14);
-
-      --primary:      #38bdf8;
-      --primary-dim:  rgba(56,189,248,0.12);
-      --primary-glow: rgba(56,189,248,0.35);
-
-      --success:      #34d399;
-      --success-bg:   rgba(52,211,153,0.1);
-      --success-bdr:  rgba(52,211,153,0.3);
-
-      --warn:         #fbbf24;
-      --warn-bg:      rgba(251,191,36,0.1);
-      --warn-bdr:     rgba(251,191,36,0.3);
-
-      --error:        #f87171;
-      --error-bg:     rgba(248,113,113,0.1);
-      --error-bdr:    rgba(248,113,113,0.3);
-
-      --text:         #f1f5f9;
-      --text-2:       #94a3b8;
-      --text-3:       #475569;
-
-      --radius-sm:    10px;
-      --radius-md:    16px;
-      --radius-lg:    22px;
-      --radius-xl:    28px;
-
-      --shadow-card:  0 24px 48px -8px rgba(0,0,0,0.6);
-      --shadow-modal: 0 32px 64px -12px rgba(0,0,0,0.75);
+      --bg: #090d16;
+      --card-bg: #151c2c;
+      --primary: #38bdf8;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --success-bg: #064e3b;
+      --success-text: #34d399;
+      --error-bg: #7f1d1d;
+      --error-text: #f87171;
+      --info-bg: #1e3a8a;
+      --info-text: #60a5fa;
     }
 
-    /* =========================================================
-       Reset & Base
-    ========================================================= */
-    *, *::before, *::after {
-      box-sizing: border-box;
-      -webkit-tap-highlight-color: transparent;
-      margin: 0; padding: 0;
-    }
-
-    html, body {
-      min-height: 100dvh;
-      background: var(--bg);
-      color: var(--text);
-      font-family: "Inter", system-ui, sans-serif;
-      -webkit-font-smoothing: antialiased;
-    }
-
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    
     body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      margin: 0;
+      padding: 24px 16px;
       display: flex;
       flex-direction: column;
       align-items: center;
-      padding: 24px 16px 120px;
-      gap: 16px;
+      min-height: 100vh;
     }
 
-    /* =========================================================
-       Header
-    ========================================================= */
-    .header {
-      text-align: center;
-      padding-top: 8px;
-      width: 100%;
-      max-width: 440px;
-    }
+    .header { text-align: center; margin-bottom: 20px; }
+    .header h1 { font-size: 1.5rem; margin: 0 0 4px 0; font-weight: 700; letter-spacing: -0.02em; }
+    .header p { color: var(--text-muted); font-size: 0.875rem; margin: 0; }
 
-    .header-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      background: var(--primary-dim);
-      border: 1px solid var(--primary-glow);
-      color: var(--primary);
-      font-size: 0.7rem;
-      font-weight: 700;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-      padding: 4px 10px;
-      border-radius: 100px;
-      margin-bottom: 10px;
-    }
-
-    .header-badge .dot {
-      width: 6px; height: 6px;
-      background: var(--primary);
-      border-radius: 50%;
-      animation: pulse-dot 1.8s ease-in-out infinite;
-    }
-
-    @keyframes pulse-dot {
-      0%, 100% { opacity: 1; transform: scale(1); }
-      50%       { opacity: 0.4; transform: scale(0.75); }
-    }
-
-    .header h1 {
-      font-size: clamp(1.3rem, 5vw, 1.65rem);
-      font-weight: 800;
-      letter-spacing: -0.03em;
-      background: linear-gradient(135deg, #f1f5f9 30%, #94a3b8);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-      line-height: 1.15;
-    }
-
-    .header p {
-      color: var(--text-2);
-      font-size: 0.875rem;
-      margin-top: 6px;
-      font-weight: 500;
-    }
-
-    /* =========================================================
-       Day Indicator
-    ========================================================= */
-    #day-indicator {
-      display: flex;
-      gap: 6px;
-      justify-content: center;
-      margin-top: 12px;
-      flex-wrap: wrap;
-    }
-
-    .day-pill {
-      padding: 4px 12px;
-      border-radius: 100px;
-      font-size: 0.7rem;
-      font-weight: 700;
-      letter-spacing: 0.05em;
-      border: 1px solid var(--border-hi);
-      color: var(--text-3);
-      background: var(--surface-1);
-      transition: all 0.2s;
-    }
-
-    .day-pill.active {
-      background: var(--primary-dim);
-      border-color: var(--primary-glow);
-      color: var(--primary);
-    }
-
-    /* =========================================================
-       Input Mode Tabs
-    ========================================================= */
-    .mode-tabs {
-      display: flex;
-      gap: 4px;
-      width: 100%;
-      max-width: 440px;
-      background: var(--surface-0);
-      border-radius: var(--radius-md);
-      padding: 4px;
-      border: 1px solid var(--border);
-    }
-
-    .mode-tab {
-      flex: 1;
-      padding: 10px 12px;
-      border-radius: calc(var(--radius-md) - 4px);
-      font-size: 0.8rem;
-      font-weight: 700;
-      text-align: center;
-      cursor: pointer;
-      border: none;
-      background: transparent;
-      color: var(--text-3);
-      transition: all 0.2s;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 6px;
-    }
-
-    .mode-tab.active {
-      background: var(--surface-2);
-      color: var(--primary);
-      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-    }
-
-    .mode-tab:hover:not(.active) {
-      color: var(--text-2);
-    }
-
-    /* =========================================================
-       Hardware Scanner Input Section
-    ========================================================= */
-    #input-mode-section {
-      width: 100%;
-      max-width: 440px;
-    }
-
-    .input-card {
-      background: var(--surface-1);
-      border-radius: var(--radius-xl);
-      padding: 20px;
-      border: 1px solid var(--border-hi);
-      box-shadow: var(--shadow-card);
-    }
-
-    .input-card-label {
-      font-size: 0.75rem;
-      font-weight: 700;
-      color: var(--text-3);
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      margin-bottom: 10px;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-
-    .input-card-label .pulse {
-      width: 8px; height: 8px;
-      background: var(--success);
-      border-radius: 50%;
-      animation: pulse-dot 1.4s ease-in-out infinite;
-    }
-
-    .id-input-wrapper {
-      display: flex;
-      gap: 8px;
-    }
-
-    #manualIdInput {
-      flex: 1;
-      padding: 14px 16px;
-      border-radius: var(--radius-md);
-      border: 2px solid var(--border-hi);
-      background: var(--surface-0);
-      color: var(--text);
-      font-size: 1.05rem;
-      font-weight: 600;
-      font-family: "Inter", monospace;
-      letter-spacing: 0.04em;
-      outline: none;
-      transition: border-color 0.2s, box-shadow 0.2s;
-    }
-
-    #manualIdInput::placeholder {
-      color: var(--text-3);
-      font-weight: 500;
-      letter-spacing: 0;
-    }
-
-    #manualIdInput:focus {
-      border-color: var(--primary);
-      box-shadow: 0 0 0 3px var(--primary-dim), 0 0 16px var(--primary-glow);
-    }
-
-    .btn-submit-id {
-      padding: 14px 20px;
-      border-radius: var(--radius-md);
-      border: none;
-      background: var(--primary);
-      color: #0a1628;
-      font-size: 0.9rem;
-      font-weight: 800;
-      cursor: pointer;
-      transition: all 0.15s;
-      white-space: nowrap;
-    }
-
-    .btn-submit-id:hover { filter: brightness(1.15); }
-    .btn-submit-id:active { transform: scale(0.97); }
-
-    .input-hint {
-      font-size: 0.72rem;
-      color: var(--text-3);
-      margin-top: 10px;
-      text-align: center;
-      font-weight: 500;
-    }
-
-    .input-hint kbd {
-      background: var(--surface-2);
-      padding: 2px 6px;
-      border-radius: 4px;
-      font-family: inherit;
-      font-size: 0.7rem;
-      font-weight: 700;
-      border: 1px solid var(--border-hi);
-      color: var(--text-2);
-    }
-
-    /* Undo row below input */
-    .undo-row {
-      display: flex;
-      gap: 8px;
-      margin-top: 12px;
-    }
-
-    #undoIdInput {
-      flex: 1;
-      padding: 10px 14px;
-      border-radius: var(--radius-sm);
-      border: 1px solid var(--border-hi);
-      background: var(--surface-0);
-      color: var(--text);
-      font-size: 0.85rem;
-      font-weight: 500;
-      font-family: "Inter", monospace;
-      outline: none;
-      transition: border-color 0.2s;
-    }
-
-    #undoIdInput:focus {
-      border-color: var(--warn);
-    }
-
-    #undoIdInput::placeholder {
-      color: var(--text-3);
-      font-weight: 400;
-    }
-
-    .btn-undo-submit {
-      padding: 10px 14px;
-      border-radius: var(--radius-sm);
-      border: 1px solid var(--warn-bdr);
-      background: var(--warn-bg);
-      color: var(--warn);
-      font-size: 0.78rem;
-      font-weight: 700;
-      cursor: pointer;
-      transition: all 0.15s;
-      white-space: nowrap;
-    }
-
-    .btn-undo-submit:hover { background: rgba(251,191,36,0.18); }
-    .btn-undo-submit:active { transform: scale(0.97); }
-
-    /* =========================================================
-       Scanner Card
-    ========================================================= */
     .scanner-card {
       width: 100%;
-      max-width: 440px;
-      background: var(--surface-1);
-      border-radius: var(--radius-xl);
-      padding: 14px;
-      box-shadow: var(--shadow-card);
-      border: 1px solid var(--border-hi);
+      max-width: 420px;
+      background: var(--card-bg);
+      border-radius: 20px;
+      padding: 16px;
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.08);
       position: relative;
-      overflow: hidden;
-    }
-
-    .scanner-card::before {
-      content: "";
-      position: absolute;
-      inset: 0;
-      background: linear-gradient(135deg, rgba(56,189,248,0.04) 0%, transparent 60%);
-      pointer-events: none;
     }
 
     #reader {
       width: 100%;
-      border-radius: var(--radius-md);
+      border-radius: 14px;
       overflow: hidden;
       border: none !important;
-      background: #000;
     }
 
     #reader video {
-      border-radius: var(--radius-md);
+      border-radius: 14px;
       object-fit: cover;
       width: 100% !important;
     }
 
-    /* Override html5-qrcode library's internal styles */
-    #reader > div { border: none !important; }
-    #reader img[alt="Info icon"] { display: none !important; }
-
-    /* =========================================================
-       Scanner Crosshair Overlay
-    ========================================================= */
-    .crosshair-overlay {
-      position: absolute;
-      inset: 14px;
-      pointer-events: none;
-      border-radius: var(--radius-md);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .crosshair {
-      position: relative;
-      width: 200px;
-      height: 200px;
-    }
-
-    /* four corners — using shared base styles */
-    .crosshair-tl,
-    .crosshair-tr,
-    .crosshair-bl,
-    .crosshair-br {
-      position: absolute;
-      width: 36px;
-      height: 36px;
-      border-color: var(--primary);
-      border-style: solid;
-      border-width: 0;
-    }
-
-    .crosshair-tl { top:0;    left:0;  border-top-width:3px;    border-left-width:3px;  border-top-left-radius:8px; }
-    .crosshair-tr { top:0;    right:0; border-top-width:3px;    border-right-width:3px; border-top-right-radius:8px; }
-    .crosshair-bl { bottom:0; left:0;  border-bottom-width:3px; border-left-width:3px;  border-bottom-left-radius:8px; }
-    .crosshair-br { bottom:0; right:0; border-bottom-width:3px; border-right-width:3px; border-bottom-right-radius:8px; }
-
-    .crosshair-scan-line {
-      position: absolute;
-      left: 8px; right: 8px;
-      height: 2px;
-      background: linear-gradient(90deg, transparent, var(--primary), transparent);
-      animation: scan-sweep 2.2s ease-in-out infinite;
-      border-radius: 1px;
-      box-shadow: 0 0 8px var(--primary-glow);
-    }
-
-    @keyframes scan-sweep {
-      0%   { top: 8px;   opacity: 0; }
-      10%  { opacity: 1; }
-      90%  { opacity: 1; }
-      100% { top: calc(100% - 10px); opacity: 0; }
-    }
-
-    /* =========================================================
-       Status Bar
-    ========================================================= */
     #status-container {
+      margin-top: 16px;
       width: 100%;
-      max-width: 440px;
+      max-width: 420px;
     }
 
     .status-box {
-      padding: 13px 16px;
-      border-radius: var(--radius-md);
+      padding: 14px 16px;
+      border-radius: 14px;
       font-weight: 600;
-      font-size: 0.9rem;
+      font-size: 0.95rem;
       text-align: center;
-      transition: all 0.25s ease;
-      background: var(--surface-1);
-      color: var(--text-2);
-      border: 1px solid var(--border);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
+      transition: all 0.2s ease;
+      background: var(--card-bg);
+      color: var(--text-muted);
+      border: 1px solid rgba(255, 255, 255, 0.05);
     }
 
-    .status-box.error   { background: var(--error-bg);   color: var(--error);   border-color: var(--error-bdr); }
-    .status-box.success { background: var(--success-bg); color: var(--success); border-color: var(--success-bdr); }
-    .status-box.warn    { background: var(--warn-bg);    color: var(--warn);    border-color: var(--warn-bdr); }
+    .status-box.error {
+      background: var(--error-bg);
+      color: var(--error-text);
+      border: 1px solid rgba(248, 113, 113, 0.3);
+    }
 
-    /* =========================================================
-       Offline Queue Badge
-    ========================================================= */
-    #offline-badge {
-      display: none;
+    .bottom-controls {
+      margin-top: auto;
+      padding-top: 24px;
       width: 100%;
-      max-width: 440px;
-      background: var(--warn-bg);
-      border: 1px solid var(--warn-bdr);
-      color: var(--warn);
-      border-radius: var(--radius-md);
-      padding: 11px 16px;
-      font-size: 0.85rem;
-      font-weight: 600;
+      max-width: 420px;
+      display: flex;
+      flex-direction: column;
       align-items: center;
-      justify-content: space-between;
       gap: 12px;
     }
 
-    #offline-badge.visible { display: flex; }
-
-    .btn-retry-offline {
-      background: var(--warn);
-      color: #0f172a;
-      border: none;
-      border-radius: var(--radius-sm);
-      padding: 5px 12px;
-      font-weight: 700;
-      font-size: 0.78rem;
-      cursor: pointer;
-      white-space: nowrap;
-      transition: opacity 0.15s;
-    }
-
-    .btn-retry-offline:active { opacity: 0.8; }
-
-    /* =========================================================
-       Bottom Controls
-    ========================================================= */
-    .bottom-controls {
-      width: 100%;
-      max-width: 440px;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
-
     .btn-export {
-      background: var(--primary-dim);
+      background: rgba(56, 189, 248, 0.1);
       color: var(--primary);
-      border: 1px solid var(--primary-glow);
-      padding: 13px 18px;
-      border-radius: var(--radius-md);
-      font-size: 0.9rem;
-      font-weight: 700;
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      padding: 10px 18px;
+      border-radius: 12px;
+      font-size: 0.875rem;
+      font-weight: 600;
       cursor: pointer;
       transition: all 0.2s ease;
       width: 100%;
-      letter-spacing: 0.01em;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
     }
 
-    .btn-export:hover  { background: rgba(56,189,248,0.18); box-shadow: 0 0 20px var(--primary-glow); }
     .btn-export:active { transform: scale(0.98); }
 
-    .file-upload-row {
-      text-align: center;
-    }
-
-    .file-upload-row label {
-      color: var(--text-3);
-      font-size: 0.78rem;
-      font-weight: 500;
+    .file-upload-fallback { text-align: center; }
+    .file-upload-fallback label {
+      color: #475569;
+      font-size: 0.75rem;
       text-decoration: underline;
       cursor: pointer;
-      transition: color 0.15s;
     }
+    .file-upload-fallback input { display: none; }
 
-    .file-upload-row label:hover { color: var(--text-2); }
-    .file-upload-row input { display: none; }
-
-    /* =========================================================
-       Modal Overlay
-    ========================================================= */
     .modal-overlay {
       position: fixed;
-      inset: 0;
-      background: rgba(7, 9, 15, 0.88);
-      backdrop-filter: blur(12px) saturate(1.5);
-      -webkit-backdrop-filter: blur(12px) saturate(1.5);
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(9, 13, 22, 0.85);
+      backdrop-filter: blur(8px);
       display: flex;
       justify-content: center;
       align-items: center;
       z-index: 9999;
       opacity: 0;
       pointer-events: none;
-      transition: opacity 0.22s ease;
+      transition: opacity 0.25s ease;
       padding: 20px;
     }
 
@@ -582,94 +145,69 @@
     }
 
     .modal-card {
-      background: var(--surface-1);
-      border: 1px solid var(--border-hi);
-      border-radius: var(--radius-xl);
-      padding: 32px 28px 28px;
+      background: #1e293b;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 24px;
+      padding: 28px 24px;
       text-align: center;
       width: 100%;
-      max-width: 360px;
-      box-shadow: var(--shadow-modal);
-      transform: translateY(16px) scale(0.96);
-      transition: transform 0.28s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-      position: relative;
+      max-width: 340px;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6);
+      transform: scale(0.9);
+      transition: transform 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     }
 
-    .modal-overlay.active .modal-card {
-      transform: translateY(0) scale(1);
-    }
+    .modal-overlay.active .modal-card { transform: scale(1); }
 
-    /* Spinner */
     .spinner {
-      width: 52px; height: 52px;
-      border: 4px solid rgba(56,189,248,0.18);
+      width: 48px;
+      height: 48px;
+      border: 4px solid rgba(56, 189, 248, 0.2);
       border-left-color: var(--primary);
       border-radius: 50%;
-      animation: spin 0.75s linear infinite;
-      margin: 0 auto 20px;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 16px auto;
     }
 
     @keyframes spin {
-      to { transform: rotate(360deg); }
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
     }
 
-    /* Icon Circle */
     .icon-circle {
-      width: 68px; height: 68px;
+      width: 64px;
+      height: 64px;
       border-radius: 50%;
       display: flex;
       align-items: center;
       justify-content: center;
-      margin: 0 auto 20px;
+      margin: 0 auto 16px auto;
     }
 
     .icon-circle.success {
       background: var(--success-bg);
-      border: 2px solid var(--success-bdr);
-      box-shadow: 0 0 24px rgba(52,211,153,0.2);
+      border: 2px solid var(--success-text);
     }
 
     .icon-circle.error {
       background: var(--error-bg);
-      border: 2px solid var(--error-bdr);
-      box-shadow: 0 0 24px rgba(248,113,113,0.2);
+      border: 2px solid var(--error-text);
     }
 
-    .icon-circle.warn {
-      background: var(--warn-bg);
-      border: 2px solid var(--warn-bdr);
-      box-shadow: 0 0 24px rgba(251,191,36,0.2);
-    }
-
-    .modal-name {
-      font-size: 1.4rem;
-      font-weight: 800;
-      color: #fff;
-      letter-spacing: -0.02em;
-      margin-bottom: 4px;
-    }
-
-    .modal-id {
-      font-size: 0.78rem;
-      color: var(--text-3);
-      font-weight: 600;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
-      margin-bottom: 10px;
+    .modal-title {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: #ffffff;
+      margin: 0 0 8px 0;
     }
 
     .modal-msg {
-      font-size: 0.9rem;
-      color: var(--text-2);
+      font-size: 0.95rem;
+      color: var(--text-muted);
       font-weight: 500;
-      margin-bottom: 24px;
-      line-height: 1.5;
+      margin: 0 0 20px 0;
       word-break: break-word;
     }
-
-    .modal-msg.success { color: var(--success); }
-    .modal-msg.error   { color: var(--error);   }
-    .modal-msg.warn    { color: var(--warn);     }
 
     .btn-group {
       display: flex;
@@ -679,46 +217,35 @@
 
     .btn {
       width: 100%;
-      padding: 13px 16px;
-      border-radius: var(--radius-md);
-      font-weight: 700;
-      font-size: 0.9rem;
+      padding: 12px 16px;
+      border-radius: 12px;
+      font-weight: 600;
+      font-size: 0.95rem;
       border: none;
       cursor: pointer;
       transition: all 0.2s ease;
-      letter-spacing: 0.01em;
     }
 
-    .btn-primary {
-      background: var(--primary);
-      color: #0a1628;
-    }
+    .btn-primary { background: var(--primary); color: #0f172a; }
+    .btn-primary:active { transform: scale(0.98); opacity: 0.9; }
 
-    .btn-primary:hover  { filter: brightness(1.1); }
-    .btn-primary:active { transform: scale(0.98); opacity: 0.92; }
-
-    .btn-ghost {
+    .btn-cancel {
       background: transparent;
-      color: var(--text-2);
+      color: var(--text-muted);
       font-size: 0.825rem;
-      font-weight: 600;
-      padding: 8px 12px;
+      padding: 6px 12px;
       text-decoration: underline;
-      text-underline-offset: 2px;
+      border: none;
+      cursor: pointer;
     }
 
-    .btn-ghost:hover { color: var(--error); }
-
-    /* =========================================================
-       Toast / Alert Banners
-    ========================================================= */
-    #toast-container {
+    #error-banner-container {
       position: fixed;
-      bottom: 16px;
+      bottom: 12px;
       left: 50%;
       transform: translateX(-50%);
       width: calc(100% - 32px);
-      max-width: 440px;
+      max-width: 420px;
       z-index: 10000;
       display: flex;
       flex-direction: column;
@@ -726,964 +253,359 @@
       pointer-events: none;
     }
 
-    .toast {
+    .alert-banner {
       pointer-events: auto;
-      padding: 13px 16px;
-      border-radius: var(--radius-md);
+      padding: 12px 16px;
+      border-radius: 14px;
       display: flex;
-      align-items: flex-start;
-      gap: 10px;
-      box-shadow: 0 12px 28px rgba(0,0,0,0.5);
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
       font-size: 0.875rem;
       font-weight: 500;
-      animation: toast-in 0.28s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-      line-height: 1.45;
+      animation: slideUp 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     }
 
-    .toast.error   { background: #3b0f0f; color: #fca5a5; border: 1px solid var(--error-bdr);   }
-    .toast.success { background: #052e20; color: #6ee7b7; border: 1px solid var(--success-bdr); }
-    .toast.warn    { background: #3b2a05; color: #fde68a; border: 1px solid var(--warn-bdr);    }
-    .toast.info    { background: #0c1f3e; color: #93c5fd; border: 1px solid rgba(96,165,250,0.3); }
+    .alert-banner.error {
+      background: var(--error-bg);
+      color: #fca5a5;
+      border: 1px solid rgba(248, 113, 113, 0.4);
+    }
 
-    .toast-icon { font-size: 1.1rem; flex-shrink: 0; margin-top: 1px; }
-    .toast-body { flex: 1; }
+    .alert-banner.success {
+      background: var(--success-bg);
+      color: #6ee7b7;
+      border: 1px solid rgba(52, 211, 153, 0.4);
+    }
 
-    .toast-close {
+    @keyframes slideUp {
+      from { transform: translateY(100%); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+
+    .alert-banner .close-btn {
       background: none;
       border: none;
       color: inherit;
-      font-size: 1.1rem;
+      font-size: 1.25rem;
+      font-weight: bold;
       cursor: pointer;
-      opacity: 0.6;
-      padding: 0;
+      padding: 0 0 0 12px;
       line-height: 1;
-      flex-shrink: 0;
     }
-
-    .toast-close:hover { opacity: 1; }
-
-    @keyframes toast-in {
-      from { transform: translateY(16px); opacity: 0; }
-      to   { transform: translateY(0);    opacity: 1; }
-    }
-
-    /* =========================================================
-       Scan Counter
-    ========================================================= */
-    #scan-stats {
-      display: flex;
-      gap: 10px;
-      width: 100%;
-      max-width: 440px;
-    }
-
-    .stat-card {
-      flex: 1;
-      background: var(--surface-1);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-md);
-      padding: 12px 14px;
-      text-align: center;
-    }
-
-    .stat-value {
-      font-size: 1.5rem;
-      font-weight: 800;
-      letter-spacing: -0.03em;
-    }
-
-    .stat-label {
-      font-size: 0.7rem;
-      font-weight: 600;
-      color: var(--text-3);
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      margin-top: 2px;
-    }
-
-    .stat-card.success .stat-value { color: var(--success); }
-    .stat-card.warn .stat-value    { color: var(--warn);    }
-    .stat-card.error .stat-value   { color: var(--error);   }
-
-    /* =========================================================
-       Responsive Hidden States
-    ========================================================= */
-    .hidden { display: none !important; }
-
   </style>
 </head>
 <body>
 
-  <!-- ========================================================
-       Header
-  ========================================================= -->
   <div class="header">
-    <div class="header-badge">
-      <span class="dot"></span>
-      Live Check-In
-    </div>
     <h1>AYAC 2026 Attendance</h1>
-    <p>Scan QR codes or type registration IDs</p>
-    <div id="day-indicator"></div>
+    <p>Point camera at student QR code</p>
   </div>
 
-  <!-- ========================================================
-       Input Mode Tabs
-  ========================================================= -->
-  <div class="mode-tabs" role="tablist">
-    <button class="mode-tab active" role="tab" id="tab-camera" aria-selected="true" onclick="switchMode('camera')">
-      📷 Camera Scan
-    </button>
-    <button class="mode-tab" role="tab" id="tab-input" aria-selected="false" onclick="switchMode('input')">
-      ⌨️ Manual / Scanner
-    </button>
+  <div class="scanner-card">
+    <div id="reader"></div>
   </div>
 
-  <!-- ========================================================
-       Camera Scanner (Mode: camera)
-  ========================================================= -->
-  <div id="camera-mode-section">
-    <div class="scanner-card">
-      <div id="reader"></div>
-      <div class="crosshair-overlay" aria-hidden="true">
-        <div class="crosshair">
-          <div class="crosshair-tl"></div>
-          <div class="crosshair-tr"></div>
-          <div class="crosshair-bl"></div>
-          <div class="crosshair-br"></div>
-          <div class="crosshair-scan-line"></div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ========================================================
-       Manual / Hardware Scanner Input (Mode: input)
-  ========================================================= -->
-  <div id="input-mode-section" class="hidden">
-    <div class="input-card">
-      <div class="input-card-label">
-        <span class="pulse"></span>
-        Check-In — Scan or Type ID
-      </div>
-      <div class="id-input-wrapper">
-        <input
-          type="text"
-          id="manualIdInput"
-          placeholder="e.g. REG-1001"
-          autocomplete="off"
-          autocorrect="off"
-          autocapitalize="characters"
-          spellcheck="false"
-          autofocus
-        >
-        <button class="btn-submit-id" id="btnSubmitId" onclick="handleCheckIn()">Check In</button>
-      </div>
-      <p class="input-hint">
-        Hardware scanner auto-submits on scan · Or press <kbd>Enter</kbd> after typing
-      </p>
-
-      <!-- Undo Section -->
-      <div class="undo-row">
-        <input
-          type="text"
-          id="undoIdInput"
-          placeholder="ID to undo…"
-          autocomplete="off"
-          autocorrect="off"
-          spellcheck="false"
-        >
-        <button class="btn-undo-submit" id="btnUndoSubmit" onclick="handleUndo()">↩ Undo</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Status Bar -->
   <div id="status-container">
-    <div id="status" class="status-box" role="status" aria-live="polite">
-      📷 Requesting camera access…
-    </div>
+    <div id="status" class="status-box">Requesting Camera...</div>
   </div>
 
-  <!-- Offline Queue Badge -->
-  <div id="offline-badge" role="alert" aria-live="assertive">
-    <span id="offline-badge-text">⚡ 0 pending writes</span>
-    <button class="btn-retry-offline" onclick="retryOfflineQueue()">Retry Now</button>
-  </div>
-
-  <!-- Scan Stats -->
-  <div id="scan-stats">
-    <div class="stat-card success">
-      <div class="stat-value" id="stat-success">0</div>
-      <div class="stat-label">Checked In</div>
-    </div>
-    <div class="stat-card warn">
-      <div class="stat-value" id="stat-dupe">0</div>
-      <div class="stat-label">Duplicates</div>
-    </div>
-    <div class="stat-card error">
-      <div class="stat-value" id="stat-fail">0</div>
-      <div class="stat-label">Failed</div>
-    </div>
-  </div>
-
-  <!-- Bottom Controls -->
   <div class="bottom-controls">
-    <button class="btn-export" id="btnExport" onclick="exportCSV()">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-        <polyline points="7 10 12 15 17 10"/>
-        <line x1="12" y1="15" x2="12" y2="3"/>
-      </svg>
-      Export Check-In Log (CSV)
-    </button>
-    <div class="file-upload-row">
-      <label for="file-qr-input">📂 Scan from image file instead</label>
-      <input type="file" id="file-qr-input" accept="image/*">
+    <button class="btn-export" onclick="exportScannedCSV()">Export Scanned IDs (CSV)</button>
+    <div class="file-upload-fallback">
+      <label for="hidden-file-input">Scan from image file instead</label>
+      <input type="file" id="hidden-file-input" accept="image/*">
     </div>
   </div>
 
-  <!-- ========================================================
-       Modal
-  ========================================================= -->
-  <div id="statusModal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+  <div id="statusModal" class="modal-overlay">
     <div class="modal-card">
       <div id="modalIcon"></div>
-      <h2 id="modalTitle" class="modal-name" style="margin-bottom:0"></h2>
-      <p  id="modalSubId"  class="modal-id"></p>
-      <p  id="modalMsg"    class="modal-msg"></p>
-
-      <div id="modalActions" class="btn-group" style="display:none">
-        <button id="btnDone"   class="btn btn-primary" onclick="closeModalAndResume()">Done ✓</button>
-        <button id="btnCancel" class="btn btn-ghost"   onclick="cancelAttendance()">↩ Don't mark attendance</button>
+      <h3 id="modalTitle" class="modal-title">Checking ID</h3>
+      <p id="modalMsg" class="modal-msg">Verifying with database...</p>
+      
+      <div id="modalActions" class="btn-group" style="display: none;">
+        <button id="btnDone" class="btn btn-primary" onclick="closeModalAndResume()">Done</button>
+        <button id="btnCancel" class="btn btn-cancel" onclick="cancelAttendance()">Don't mark attendance</button>
       </div>
     </div>
   </div>
 
-  <!-- Toast Container -->
-  <div id="toast-container" aria-live="assertive"></div>
+  <div id="error-banner-container"></div>
 
-  <!-- ========================================================
-       JavaScript
-  ========================================================= -->
   <script>
-    "use strict";
+    const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzRQYi29sudHW3Ijq327xzFD7YnUHplUlDXTlnsz4rJ2ovObQURDFXlRtKValOLG2c3/exec";
 
-    // ══════════════════════════════════════════════════════════
-    //  Configuration
-    // ══════════════════════════════════════════════════════════
-    const APPS_SCRIPT_URL =
-      "https://script.google.com/macros/s/AKfycbzRQYi29sudHW3Ijq327xzFD7YnUHplUlDXTlnsz4rJ2ovObQURDFXlRtKValOLG2c3/exec";
+    const statusDiv = document.getElementById("status");
+    const statusModal = document.getElementById("statusModal");
+    const modalIcon = document.getElementById("modalIcon");
+    const modalTitle = document.getElementById("modalTitle");
+    const modalMsg = document.getElementById("modalMsg");
+    const modalActions = document.getElementById("modalActions");
+    const btnCancel = document.getElementById("btnCancel");
 
-    const EVENT_START   = new Date("2026-08-12T00:00:00");
-    const NUM_DAYS      = 5;
-    const RECENT_ID_TTL = 10000;  // ms — duplicate scan guard window
-    const JSONP_TIMEOUT = 10000;  // ms — per-request timeout
-    const MAX_RETRIES   = 3;      // write-queue retry limit
-    const AUTO_REFOCUS_DELAY = 300; // ms — delay before re-focusing input
+    let html5QrCode;
+    let isProcessing = false;
+    let currentRegId = "";
 
-    // ══════════════════════════════════════════════════════════
-    //  DOM References
-    // ══════════════════════════════════════════════════════════
-    const statusDiv        = document.getElementById("status");
-    const statusModal      = document.getElementById("statusModal");
-    const modalIcon        = document.getElementById("modalIcon");
-    const modalTitle       = document.getElementById("modalTitle");
-    const modalSubId       = document.getElementById("modalSubId");
-    const modalMsg         = document.getElementById("modalMsg");
-    const modalActions     = document.getElementById("modalActions");
-    const btnCancel        = document.getElementById("btnCancel");
-    const offlineBadge     = document.getElementById("offline-badge");
-    const offlineText      = document.getElementById("offline-badge-text");
-    const statSuccess      = document.getElementById("stat-success");
-    const statDupe         = document.getElementById("stat-dupe");
-    const statFail         = document.getElementById("stat-fail");
-    const manualIdInput    = document.getElementById("manualIdInput");
-    const undoIdInput      = document.getElementById("undoIdInput");
-    const cameraModeEl     = document.getElementById("camera-mode-section");
-    const inputModeEl      = document.getElementById("input-mode-section");
-    const tabCamera        = document.getElementById("tab-camera");
-    const tabInput         = document.getElementById("tab-input");
-
-    // ══════════════════════════════════════════════════════════
-    //  State
-    // ══════════════════════════════════════════════════════════
-    let html5QrCode       = null;
-    let isProcessing      = false;
-    let currentRegId      = "";
-    let currentMode       = "camera"; // "camera" | "input"
-
-    const checkedInLog    = []; // For CSV export
-    const writeQueue      = []; // FIFO: { id, name, retries, cancelled }
+    const scannedRecords = [];
+    const fifoQueue = [];
     let isProcessingQueue = false;
-    const offlineQueue    = []; // Exhausted-retry items
-    const recentIds       = new Map(); // Map<id, expiryTimestamp>
 
-    let countSuccess = 0, countDupe = 0, countFail = 0;
-
-    // ══════════════════════════════════════════════════════════
-    //  Day Indicator UI
-    // ══════════════════════════════════════════════════════════
-    (function renderDayIndicator() {
-      const container = document.getElementById("day-indicator");
-      const now       = new Date();
-      for (let d = 0; d < NUM_DAYS; d++) {
-        const dayDate  = new Date(EVENT_START.getTime() + d * 86_400_000);
-        const isToday  = dayDate.toDateString() === now.toDateString();
-        const label    = dayDate.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-        const pill     = document.createElement("span");
-        pill.className = "day-pill" + (isToday ? " active" : "");
-        pill.textContent = `Day ${d + 1} · ${label}`;
-        container.appendChild(pill);
-      }
-    })();
-
-    // ══════════════════════════════════════════════════════════
-    //  Input Mode Switching
-    // ══════════════════════════════════════════════════════════
-
-    function switchMode(mode) {
-      currentMode = mode;
-
-      tabCamera.classList.toggle("active", mode === "camera");
-      tabCamera.setAttribute("aria-selected", mode === "camera");
-      tabInput.classList.toggle("active", mode === "input");
-      tabInput.setAttribute("aria-selected", mode === "input");
-
-      cameraModeEl.classList.toggle("hidden", mode !== "camera");
-      inputModeEl.classList.toggle("hidden",  mode !== "input");
-
-      if (mode === "input") {
-        // Pause camera when in input mode to save resources
-        if (html5QrCode) {
-          try { html5QrCode.pause(); } catch (_) {}
-        }
-        refocusInput();
-        setStatus("⌨️ Ready — scan barcode or type ID", "");
-      } else {
-        // Resume camera when switching back
-        if (html5QrCode) {
-          try { html5QrCode.resume(); } catch (_) {}
-        }
-        setStatus("📷 Camera ready — point at QR code", "");
-      }
-    }
-
-    // ══════════════════════════════════════════════════════════
-    //  Auto-Refocus: keeps input field hot for hardware scanners
-    // ══════════════════════════════════════════════════════════
-
-    function refocusInput() {
-      if (currentMode === "input" && !statusModal.classList.contains("active")) {
-        setTimeout(() => {
-          manualIdInput.focus();
-          // Select any existing text so next scan overwrites
-          manualIdInput.select();
-        }, AUTO_REFOCUS_DELAY);
-      }
-    }
-
-    // ══════════════════════════════════════════════════════════
-    //  JSONP Network Transport
-    //  Spec name: sendJsonpRequest
-    // ══════════════════════════════════════════════════════════
-
-    /**
-     * Sends a JSONP request to the GAS web app.
-     * Guarantees: exactly one resolve/reject, script tag cleanup, no memory leaks.
-     *
-     * @param {string} regId   — Registration ID to send
-     * @param {"check"|"process"|"undo"} action
-     * @returns {Promise<object>} — Parsed JSON response from GAS
-     */
-    function sendJsonpRequest(regId, action = "check") {
-      return new Promise((resolve, reject) => {
-        const cbName = "jcb_" + Date.now() + "_" + (Math.random() * 1e6 | 0);
-        const script = document.createElement("script");
-        let settled  = false; // Guard: ensures exactly one settlement
-
-        const settle = (fn, value) => {
-          if (settled) return;
-          settled = true;
-          cleanup();
-          fn(value);
-        };
-
-        const timeoutId = setTimeout(
-          () => settle(reject, "REQUEST_TIMEOUT"),
-          JSONP_TIMEOUT
-        );
-
-        function cleanup() {
-          clearTimeout(timeoutId);
-          // Delete callback BEFORE removing script to prevent late re-entry
-          if (typeof window[cbName] !== "undefined") {
-            try { delete window[cbName]; } catch (_) { window[cbName] = undefined; }
-          }
-          if (script.parentNode) script.parentNode.removeChild(script);
-        }
-
-        window[cbName] = (data) => settle(resolve, data);
-        script.onerror = ()     => settle(reject, "NETWORK_ERROR");
-
-        script.src =
-          `${APPS_SCRIPT_URL}?id=${encodeURIComponent(regId)}` +
-          `&action=${action}&callback=${cbName}&_=${Date.now()}`;
-
-        document.body.appendChild(script);
-      });
-    }
-
-    // ══════════════════════════════════════════════════════════
-    //  Response Normalizer
-    // ══════════════════════════════════════════════════════════
-
-    function isSuccessResponse(res) {
-      if (!res) return false;
-      if (res.success === true || res.marked === true) return true;
-      if (typeof res.status === "string") {
-        const s = res.status.toLowerCase();
-        if (s === "success" || s === "marked" || s === "already_marked" || s === "ok") return true;
-      }
-      return false;
-    }
-
-    // ══════════════════════════════════════════════════════════
-    //  Modal Helpers
-    // ══════════════════════════════════════════════════════════
-
-    function showLoadingModal(id) {
-      modalIcon.innerHTML    = `<div class="spinner"></div>`;
-      modalTitle.textContent = "Verifying ID…";
-      modalSubId.textContent = id || "";
-      modalMsg.className     = "modal-msg";
-      modalMsg.textContent   = "Connecting to database…";
+    function showLoadingModal() {
+      modalIcon.innerHTML = `<div class="spinner"></div>`;
+      modalTitle.innerText = "Checking ID";
+      modalMsg.innerText = "Verifying database...";
       modalActions.style.display = "none";
       statusModal.classList.add("active");
     }
 
-    /**
-     * @param {"success"|"error"|"warn"} type
-     * @param {string} name       — Attendee name (displayed large)
-     * @param {string} id         — Registration ID (sub-label)
-     * @param {string} message    — Detail message
-     * @param {boolean} showUndo  — Show "Don't mark attendance" button
-     */
-    function showResultModal(type, name, id, message, showUndo) {
-      const icons = {
-        success: `<svg viewBox="0 0 24 24" fill="var(--success)" width="34" height="34"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>`,
-        error:   `<svg viewBox="0 0 24 24" fill="var(--error)"   width="34" height="34"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>`,
-        warn:    `<svg viewBox="0 0 24 24" fill="var(--warn)"    width="34" height="34"><path d="M12 2L1 21h22L12 2zm0 3.5L20.5 19h-17L12 5.5zM11 10v4h2v-4h-2zm0 6v2h2v-2h-2z"/></svg>`,
-      };
+    function showResultModal(message, isSuccess) {
+      if (isSuccess) {
+        modalIcon.innerHTML = `
+          <div class="icon-circle success">
+            <svg viewBox="0 0 24 24" fill="#34d399" width="32" height="32"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+          </div>`;
+        modalTitle.innerText = "Success";
+        btnCancel.style.display = "block";
+      } else {
+        modalIcon.innerHTML = `
+          <div class="icon-circle error">
+            <svg viewBox="0 0 24 24" fill="#f87171" width="32" height="32"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+          </div>`;
+        modalTitle.innerText = "Notice";
+        btnCancel.style.display = "none";
+      }
 
-      modalIcon.innerHTML    = `<div class="icon-circle ${type}">${icons[type] || icons.error}</div>`;
-      modalTitle.textContent = name    || (type === "success" ? "Checked In!" : "Notice");
-      modalSubId.textContent = id      || "";
-      modalMsg.className     = `modal-msg ${type}`;
-      modalMsg.textContent   = message || "";
-
-      btnCancel.style.display    = showUndo ? "block" : "none";
+      modalMsg.innerText = message;
       modalActions.style.display = "flex";
     }
 
     function closeModalAndResume() {
       statusModal.classList.remove("active");
-
-      if (currentMode === "camera" && html5QrCode) {
-        try { html5QrCode.resume(); } catch (_) {}
+      if (html5QrCode) {
+        try { html5QrCode.resume(); } catch (e) {}
       }
-
-      setStatus(
-        currentMode === "camera"
-          ? "📷 Ready to scan…"
-          : "⌨️ Ready — scan barcode or type ID",
-        ""
-      );
-
+      statusDiv.innerText = "Ready for next scan...";
+      statusDiv.className = "status-box";
       isProcessing = false;
       currentRegId = "";
-
-      // Auto-refocus the input for hardware scanner rapid-fire
-      refocusInput();
     }
 
-    // Close modal on overlay background click
-    statusModal.addEventListener("click", (e) => {
-      if (e.target === statusModal) closeModalAndResume();
-    });
-
-    // Close modal on Escape key
-    document.addEventListener("keydown", (e) => {
-      if (e.key === "Escape" && statusModal.classList.contains("active")) {
+    async function cancelAttendance() {
+      if (!currentRegId) {
         closeModalAndResume();
-      }
-    });
-
-    // ══════════════════════════════════════════════════════════
-    //  handleCheckIn() — Primary UI handler
-    //  Captures input, sends check+process requests, clears input
-    // ══════════════════════════════════════════════════════════
-
-    /**
-     * Initiates check-in for a given registration ID.
-     * Called from:
-     *  - Manual input submit button
-     *  - Enter key in input field
-     *  - QR camera scan callback
-     *
-     * @param {string} [rawInput] — If omitted, reads from manualIdInput
-     */
-    async function handleCheckIn(rawInput) {
-      // Determine the source ID
-      let regId;
-      if (typeof rawInput === "string" && rawInput.trim()) {
-        regId = rawInput.trim();
-      } else {
-        regId = manualIdInput.value.trim();
-        manualIdInput.value = ""; // Clear input immediately for next scan
+        return;
       }
 
-      // Parse QR payload (supports plain ID or URL with id= param)
-      if (regId.includes("id=")) {
-        try {
-          regId = new URL(regId).searchParams.get("id") || regId.split("id=")[1].split("&")[0];
-        } catch (_) {
-          regId = regId.split("id=")[1].split("&")[0];
+      const recordIdx = scannedRecords.findIndex(r => r.id === currentRegId);
+      if (recordIdx !== -1) scannedRecords.splice(recordIdx, 1);
+
+      const queueIdx = fifoQueue.findIndex(item => item.id === currentRegId);
+      if (queueIdx !== -1) fifoQueue.splice(queueIdx, 1);
+
+      showResultModal("Removing attendance entry...", false);
+
+      try {
+        await sendCheckInRequest(currentRegId, "undo");
+      } catch (err) {}
+
+      setTimeout(() => {
+        closeModalAndResume();
+      }, 1000);
+    }
+
+    function sendCheckInRequest(regId, action = "check") {
+      return new Promise((resolve, reject) => {
+        const callbackName = "jsonp_cb_" + Date.now() + "_" + Math.floor(Math.random() * 10000);
+        const script = document.createElement("script");
+
+        const timeoutId = setTimeout(() => {
+          cleanup();
+          reject("REQUEST_TIMEOUT");
+        }, 8000);
+
+        function cleanup() {
+          clearTimeout(timeoutId);
+          if (window[callbackName]) delete window[callbackName];
+          if (script.parentNode) script.parentNode.removeChild(script);
         }
-      }
-      regId = regId.replace(/^["']|["']$/g, "").trim();
 
-      if (!regId) {
-        if (currentMode === "input") refocusInput();
-        return;
-      }
+        window[callbackName] = function(data) {
+          cleanup();
+          resolve(data);
+        };
 
-      if (isProcessing) {
-        showToast("⏳ Still processing previous scan…", "warn");
-        refocusInput();
-        return;
-      }
+        script.onerror = function() {
+          cleanup();
+          reject("Network connection failed");
+        };
 
-      // ── Duplicate scan guard (TTL-based) ──
-      const now = Date.now();
-      recentIds.forEach((expiry, id) => { if (now > expiry) recentIds.delete(id); });
-      if (recentIds.has(regId)) {
-        showToast(`⏱ "${regId}" was just scanned — wait a moment.`, "warn");
-        setStatus(`⏱ Duplicate blocked: ${regId}`, "warn");
-        refocusInput();
-        return;
-      }
-      recentIds.set(regId, now + RECENT_ID_TTL);
+        script.src = `${APPS_SCRIPT_URL}?id=${encodeURIComponent(regId)}&action=${action}&callback=${callbackName}&_=${Date.now()}`;
+        document.body.appendChild(script);
+      });
+    }
 
-      // ── Lock & show loading ──
+    async function onScanSuccess(decodedText) {
+      if (isProcessing) return;
       isProcessing = true;
+
+      if (html5QrCode) {
+        try { html5QrCode.pause(); } catch (e) {}
+      }
+
+      showLoadingModal();
+
+      let regId = decodedText.trim();
+      if (regId.includes("id=")) {
+        regId = regId.split("id=")[1].split("&")[0];
+      }
+
       currentRegId = regId;
 
-      if (currentMode === "camera" && html5QrCode) {
-        try { html5QrCode.pause(); } catch (_) {}
-      }
-
-      showLoadingModal(regId);
-
-      // ── Step 1: Verify ID (action=check) ──
       try {
-        const res = await sendJsonpRequest(regId, "check");
-
-        if (isSuccessResponse(res)) {
-          // ID found — enqueue the write and show success
-          const name      = res.name || "Attendee";
-          const timestamp = new Date().toLocaleString(undefined, { timeZone: getLocalTZ() });
-
-          checkedInLog.push({ id: regId, name, timestamp });
-          writeQueue.push({ id: regId, name, retries: 0, cancelled: false });
-          processWriteQueue();
-
-          updateStats(1, 0, 0);
-          showResultModal("success", name, regId, "✅ Attendance being recorded…", true);
-
-        } else {
-          // ID not found OR other failure — check if backend says "already checked in"
-          // Note: the "check" action never returns alreadyCheckedIn (only "process" does),
-          // but we handle it defensively in case backend logic changes.
-          if (res && res.alreadyCheckedIn) {
-            updateStats(0, 1, 0);
-            showResultModal("warn", res.name || "Already In", regId,
-              "This attendee already checked in today.", false);
-          } else {
-            updateStats(0, 0, 1);
-            const msg = (res && res.message) ? res.message : `ID "${regId}" not found.`;
-            showResultModal("error", "Not Found", regId, msg, false);
-          }
-        }
-
+        const response = await sendCheckInRequest(regId, "check");
+        handleCheckInResponse(response, regId);
       } catch (err) {
         if (err === "REQUEST_TIMEOUT") {
           closeModalAndResume();
-          showToast(`⏳ Lookup timed out for ${regId}. Retrying in background…`, "warn");
-          setStatus(`⏳ Timeout — retrying ${regId}…`, "warn");
-
-          // Background retry
-          sendJsonpRequest(regId, "check")
+          showNotificationBanner(`Lookup timed out for ${regId}. Retrying in background...`, "error");
+          
+          sendCheckInRequest(regId, "check")
             .then(res => {
-              if (isSuccessResponse(res)) {
-                showToast(`✅ ${res.name || regId} verified after retry!`, "success");
+              if (checkIsSuccessful(res)) {
+                showNotificationBanner(`Success: ID ${regId} verified after timeout!`, "success");
               }
             })
             .catch(() => {});
         } else {
-          showResultModal("error", "Network Error", regId, String(err), false);
+          showResultModal(`Verification error: ${err}`, false);
         }
       }
     }
 
-    // ══════════════════════════════════════════════════════════
-    //  handleUndo() — Undo UI handler
-    //  Captures input, dispatches undo requests, updates feedback
-    // ══════════════════════════════════════════════════════════
+    function checkIsSuccessful(response) {
+      if (!response) return false;
+      if (response.success === true || response.marked === true) return true;
+      if (typeof response.status === "string") {
+        const st = response.status.toLowerCase();
+        if (st === "success" || st === "already_marked" || st === "marked" || st === "ok") return true;
+      }
+      return false;
+    }
 
-    /**
-     * Sends an undo request for a given registration ID.
-     * Called from:
-     *  - Undo input submit button
-     *  - Enter key in undo input field
-     *  - "Don't mark attendance" button in modal (via cancelAttendance)
-     *
-     * @param {string} [rawInput] — If omitted, reads from undoIdInput
-     */
-    async function handleUndo(rawInput) {
-      let regId;
-      if (typeof rawInput === "string" && rawInput.trim()) {
-        regId = rawInput.trim();
+    function handleCheckInResponse(response, regId) {
+      const isSuccess = checkIsSuccessful(response);
+
+      if (isSuccess) {
+        const timestamp = new Date().toISOString();
+        const personName = response.name || response.studentName || "Student";
+        const verifiedId = response.id || regId;
+
+        scannedRecords.push({ id: verifiedId, name: personName, timestamp: timestamp });
+        fifoQueue.push({ id: verifiedId, name: personName, retries: 0 });
+        processQueue();
+
+        showResultModal("Success", true);
       } else {
-        regId = undoIdInput.value.trim();
-        undoIdInput.value = "";
+        const msg = (response && response.message) ? response.message : `ID ${regId} not found.`;
+        showResultModal(msg, false);
       }
-
-      regId = regId.replace(/^["']|["']$/g, "").trim();
-
-      if (!regId) {
-        showToast("Enter an ID to undo.", "warn");
-        return;
-      }
-
-      setStatus(`↩ Undoing check-in for ${regId}…`, "warn");
-
-      try {
-        const res = await sendJsonpRequest(regId, "undo");
-
-        if (isSuccessResponse(res)) {
-          const name = res.name || regId;
-          showToast(`✅ Attendance removed for ${name}`, "success");
-          setStatus(`✅ Undo successful: ${name}`, "success");
-
-          // Also remove from local log if present
-          const logIdx = checkedInLog.findIndex(r => r.id === regId);
-          if (logIdx !== -1) {
-            checkedInLog.splice(logIdx, 1);
-            updateStats(-1, 0, 0);
-          }
-        } else {
-          const msg = (res && res.message) ? res.message : "Undo failed.";
-          showToast(`❌ ${msg}`, "error");
-          setStatus(`❌ Undo failed: ${msg}`, "error");
-        }
-      } catch (err) {
-        showToast(`❌ Undo request failed: ${err}`, "error");
-        setStatus("❌ Undo failed — network error", "error");
-      }
-
-      refocusInput();
     }
 
-    // ══════════════════════════════════════════════════════════
-    //  cancelAttendance() — Modal "Don't mark" button handler
-    // ══════════════════════════════════════════════════════════
-
-    async function cancelAttendance() {
-      const idToCancel = currentRegId;
-      if (!idToCancel) { closeModalAndResume(); return; }
-
-      // Mark queue item as cancelled so processWriteQueue skips it
-      for (const item of writeQueue) {
-        if (item.id === idToCancel) item.cancelled = true;
-      }
-
-      // Remove from offline queue too
-      const offIdx = offlineQueue.findIndex(i => i.id === idToCancel);
-      if (offIdx !== -1) offlineQueue.splice(offIdx, 1);
-
-      // Remove from local log
-      const logIdx = checkedInLog.findIndex(r => r.id === idToCancel);
-      if (logIdx !== -1) checkedInLog.splice(logIdx, 1);
-
-      // Show feedback while undo fires
-      showResultModal("warn", "Removing…", idToCancel, "Sending undo request…", false);
-
-      try {
-        await sendJsonpRequest(idToCancel, "undo");
-      } catch (_) {
-        // Best-effort: if this fails, the GAS lock prevents future double-marks
-      }
-
-      updateStats(-1, 0, 0);
-      setTimeout(closeModalAndResume, 900);
-    }
-
-    // ══════════════════════════════════════════════════════════
-    //  QR Camera Scan Callback
-    // ══════════════════════════════════════════════════════════
-
-    function onScanSuccess(decodedText) {
-      // Delegate to the unified handleCheckIn
-      handleCheckIn(decodedText);
-    }
-
-    // ══════════════════════════════════════════════════════════
-    //  Keyboard Handlers — Enter key support
-    // ══════════════════════════════════════════════════════════
-
-    manualIdInput.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        handleCheckIn();
-      }
-    });
-
-    undoIdInput.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        handleUndo();
-      }
-    });
-
-    // Global keyboard: if user types while in input mode and not focused,
-    // redirect keystrokes to the input field (hardware scanner compatibility)
-    document.addEventListener("keydown", (e) => {
-      if (currentMode !== "input") return;
-      if (statusModal.classList.contains("active")) return;
-
-      const tag = (e.target.tagName || "").toLowerCase();
-      if (tag === "input" || tag === "textarea" || tag === "select") return;
-
-      // Printable character — focus the input so scanner data goes there
-      if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
-        manualIdInput.focus();
-        // Don't preventDefault — let the character be typed into the field
-      }
-    });
-
-    // ══════════════════════════════════════════════════════════
-    //  Write Queue Processor (action=process)
-    // ══════════════════════════════════════════════════════════
-
-    async function processWriteQueue() {
-      if (isProcessingQueue || writeQueue.length === 0) return;
+    async function processQueue() {
+      if (isProcessingQueue || fifoQueue.length === 0) return;
       isProcessingQueue = true;
 
-      const item = writeQueue[0];
-
-      // Skip cancelled items
-      if (item.cancelled) {
-        writeQueue.shift();
-        isProcessingQueue = false;
-        processWriteQueue();
-        return;
-      }
+      const item = fifoQueue[0];
 
       try {
-        const res = await sendJsonpRequest(item.id, "process");
-
-        if (isSuccessResponse(res) || (res && res.alreadyCheckedIn)) {
-          // "success" and "already checked in" both mean the sheet state is correct
-          writeQueue.shift();
+        const response = await sendCheckInRequest(item.id, "process");
+        if (checkIsSuccessful(response)) {
+          fifoQueue.shift();
         } else {
-          throw new Error(res && res.message ? res.message : "GAS returned failure");
+          throw new Error();
         }
-
       } catch (err) {
         item.retries++;
-
-        if (item.retries >= MAX_RETRIES) {
-          writeQueue.shift();
-
-          if (!item.cancelled) {
-            offlineQueue.push(item);
-            updateOfflineBadge();
-            showToast(
-              `⚠️ Could not write attendance for ${item.name}. Added to offline queue.`,
-              "warn"
-            );
-          }
+        if (item.retries >= 2) {
+          fifoQueue.shift();
         }
-        // else: stays in queue — will retry on next call
-      }
-
-      isProcessingQueue = false;
-      if (writeQueue.length > 0) processWriteQueue();
-    }
-
-    // ══════════════════════════════════════════════════════════
-    //  Offline Queue Retry
-    // ══════════════════════════════════════════════════════════
-
-    async function retryOfflineQueue() {
-      if (offlineQueue.length === 0) return;
-      showToast(`🔄 Retrying ${offlineQueue.length} offline item(s)…`, "info");
-
-      const batch = offlineQueue.splice(0);
-      updateOfflineBadge();
-
-      for (const item of batch) {
-        item.retries = 0;
-        item.cancelled = false;
-        writeQueue.push(item);
-      }
-
-      processWriteQueue();
-    }
-
-    function updateOfflineBadge() {
-      const n = offlineQueue.length;
-      if (n === 0) {
-        offlineBadge.classList.remove("visible");
-      } else {
-        offlineText.textContent = `⚡ ${n} pending write${n > 1 ? "s" : ""}`;
-        offlineBadge.classList.add("visible");
+      } finally {
+        isProcessingQueue = false;
+        if (fifoQueue.length > 0) {
+          processQueue();
+        }
       }
     }
 
-    // ══════════════════════════════════════════════════════════
-    //  Statistics
-    // ══════════════════════════════════════════════════════════
+    function showNotificationBanner(message, type = "error") {
+      const container = document.getElementById("error-banner-container");
+      const banner = document.createElement("div");
+      banner.className = `alert-banner ${type}`;
+      banner.innerHTML = `
+        <span>${type === 'success' ? '✅' : '⚠️'} ${message}</span>
+        <button class="close-btn" onclick="this.parentElement.remove()">✕</button>
+      `;
+      container.appendChild(banner);
 
-    function updateStats(deltaSuccess, deltaDupe, deltaFail) {
-      countSuccess = Math.max(0, countSuccess + deltaSuccess);
-      countDupe    = Math.max(0, countDupe    + deltaDupe);
-      countFail    = Math.max(0, countFail    + deltaFail);
-      statSuccess.textContent = countSuccess;
-      statDupe.textContent    = countDupe;
-      statFail.textContent    = countFail;
+      setTimeout(() => {
+        if (banner.parentNode) banner.parentNode.removeChild(banner);
+      }, 6000);
     }
 
-    // ══════════════════════════════════════════════════════════
-    //  Status Bar
-    // ══════════════════════════════════════════════════════════
-
-    function setStatus(text, type) {
-      statusDiv.textContent = text;
-      statusDiv.className   = "status-box" + (type ? " " + type : "");
-    }
-
-    // ══════════════════════════════════════════════════════════
-    //  Toast Notifications
-    // ══════════════════════════════════════════════════════════
-
-    const toastIcons = {
-      success: "✅", error: "❌", warn: "⚠️", info: "ℹ️",
-    };
-
-    function showToast(message, type = "info", durationMs = 6000) {
-      const container = document.getElementById("toast-container");
-      const toast     = document.createElement("div");
-      toast.className = `toast ${type}`;
-      toast.innerHTML =
-        `<span class="toast-icon">${toastIcons[type] || "ℹ️"}</span>` +
-        `<span class="toast-body">${escapeHtml(message)}</span>` +
-        `<button class="toast-close" aria-label="Dismiss" onclick="this.parentElement.remove()">✕</button>`;
-      container.appendChild(toast);
-      setTimeout(() => { if (toast.parentNode) toast.remove(); }, durationMs);
-    }
-
-    function escapeHtml(str) {
-      const d = document.createElement("div");
-      d.textContent = str;
-      return d.innerHTML;
-    }
-
-    // ══════════════════════════════════════════════════════════
-    //  CSV Export
-    // ══════════════════════════════════════════════════════════
-
-    function exportCSV() {
-      if (!checkedInLog.length) {
-        showToast("No check-in records yet. Scan some attendees first.", "warn");
+    function exportScannedCSV() {
+      if (!scannedRecords || scannedRecords.length === 0) {
+        alert("No scanned records available to export yet.");
         return;
       }
 
-      const rows = ["ID,Name,Scan Timestamp (Local)"];
-      checkedInLog.forEach(r => {
-        const safeName = (r.name || "").replace(/"/g, '""');
-        rows.push(`"${r.id}","${safeName}","${r.timestamp}"`);
+      let csvRows = ["ID,Name,Scan Timestamp"];
+      scannedRecords.forEach(row => {
+        const safeName = (row.name || "Student").replace(/"/g, '""');
+        csvRows.push(`"${row.id}","${safeName}","${row.timestamp}"`);
       });
 
-      const blob = new Blob([rows.join("\r\n")], { type: "text/csv;charset=utf-8;" });
-      const url  = URL.createObjectURL(blob);
-      const a    = document.createElement("a");
-      a.href     = url;
-      a.download = `ayac2026_checkins_${new Date().toISOString().slice(0, 10)}.csv`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
+      const blob = new Blob([csvRows.join("\n")], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.setAttribute("href", url);
+      link.setAttribute("download", `attendance_scans_${new Date().toISOString().slice(0,10)}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
       URL.revokeObjectURL(url);
     }
 
-    // ══════════════════════════════════════════════════════════
-    //  Timezone Helper
-    // ══════════════════════════════════════════════════════════
-
-    function getLocalTZ() {
-      try { return Intl.DateTimeFormat().resolvedOptions().timeZone; }
-      catch (_) { return "UTC"; }
-    }
-
-    // ══════════════════════════════════════════════════════════
-    //  Camera Initialization
-    // ══════════════════════════════════════════════════════════
-
     async function startCamera() {
       html5QrCode = new Html5Qrcode("reader");
-      const config = {
-        fps:         15,
-        qrbox:       { width: 220, height: 220 },
-        aspectRatio: 1.0,
-        verbose:     false,
-      };
-
-      const tryStart = async (constraints) => {
-        await html5QrCode.start(constraints, config, onScanSuccess, () => {});
-      };
+      const config = { fps: 15, qrbox: { width: 220, height: 220 }, aspectRatio: 1.0 };
 
       try {
-        await tryStart({ facingMode: { exact: "environment" } });
-        setStatus("📷 Camera ready — point at QR code", "");
-      } catch (_) {
+        await html5QrCode.start({ facingMode: { exact: "environment" } }, config, onScanSuccess);
+        statusDiv.innerText = "Ready to scan...";
+      } catch (e1) {
         try {
-          await tryStart({ facingMode: "environment" });
-          setStatus("📷 Camera ready — point at QR code", "");
-        } catch (_2) {
-          try {
-            await tryStart(true);
-            setStatus("📷 Camera ready (front-facing) — point at QR code", "");
-          } catch (_3) {
-            setStatus("❌ Camera unavailable — switch to Manual/Scanner tab", "error");
-          }
+          await html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess);
+          statusDiv.innerText = "Ready to scan...";
+        } catch (e2) {
+          statusDiv.innerText = "Camera permission denied";
+          statusDiv.className = "status-box error";
         }
       }
     }
 
     startCamera();
 
-    // ── File QR scan fallback ─────────────────────────────────
-    document.getElementById("file-qr-input").addEventListener("change", (e) => {
-      const file = e.target.files[0];
-      if (!file || !html5QrCode) return;
-      e.target.value = "";
-
-      html5QrCode.scanFile(file, true)
+    document.getElementById("hidden-file-input").addEventListener("change", (e) => {
+      if (e.target.files.length === 0) return;
+      html5QrCode.scanFile(e.target.files[0], true)
         .then(onScanSuccess)
-        .catch(() => setStatus("❌ Could not read QR code from image", "error"));
+        .catch(() => {
+          statusDiv.innerText = "Failed to parse QR file";
+          statusDiv.className = "status-box error";
+        });
     });
-
   </script>
 </body>
 </html>
