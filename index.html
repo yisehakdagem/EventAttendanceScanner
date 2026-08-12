@@ -161,11 +161,6 @@
       border: 2px solid var(--error-text);
     }
 
-    .icon-circle svg {
-      width: 32px;
-      height: 32px;
-    }
-
     .modal-title {
       font-size: 1.25rem;
       font-weight: 700;
@@ -268,7 +263,6 @@
   </div>
 
   <script>
-    // Paste your exact Apps Script Deployment URL here
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzRQYi29sudHW3Ijq327xzFD7YnUHplUlDXTlnsz4rJ2ovObQURDFXlRtKValOLG2c3/exec";
 
     const statusDiv = document.getElementById("status");
@@ -281,17 +275,16 @@
 
     let html5QrCode;
     let isProcessing = false;
+    let currentRegId = ""; // Stores ID currently being processed
 
-    // Open Modal in Loading State
-    function showLoadingModal() {
+    function showLoadingModal(title = "Checking...", message = "Verifying Registration ID") {
       modalIcon.innerHTML = `<div class="spinner"></div>`;
-      modalTitle.innerText = "Checking... ";
-      modalMsg.innerText = "Verifying Registration ID";
+      modalTitle.innerText = title;
+      modalMsg.innerText = message;
       modalActions.style.display = "none";
       statusModal.classList.add("active");
     }
 
-    // Update Modal to Complete State (Success / Warning)
     function showResultModal(message, isSuccess) {
       if (isSuccess) {
         modalIcon.innerHTML = `
@@ -306,7 +299,7 @@
             <svg viewBox="0 0 24 24" fill="#f87171"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
           </div>`;
         modalTitle.innerText = "Notice";
-        btnCancel.style.display = "none"; // Hide cancel button if lookup failed or already checked in
+        btnCancel.style.display = "none";
       }
 
       modalMsg.innerText = message;
@@ -321,14 +314,30 @@
       statusDiv.innerText = "Ready for next scan...";
       statusDiv.className = "status-box";
       isProcessing = false;
+      currentRegId = "";
     }
 
-    function cancelAttendance() {
-      // Logic space to execute explicit revert if needed
-      closeModalAndResume();
+    async function cancelAttendance() {
+      if (!currentRegId) {
+        closeModalAndResume();
+        return;
+      }
+
+      showLoadingModal("Cancelling...", "Removing attendance entry...");
+
+      try {
+        const resultText = await sendCheckInRequest(currentRegId, "undo");
+        statusDiv.innerText = resultText;
+      } catch (err) {
+        statusDiv.innerText = "Failed to undo check-in";
+      }
+
+      setTimeout(() => {
+        closeModalAndResume();
+      }, 1200);
     }
 
-    function sendCheckInRequest(regId) {
+    function sendCheckInRequest(regId, action = "checkin") {
       return new Promise((resolve, reject) => {
         const callbackName = "jsonp_callback_" + Math.round(100000 * Math.random());
         const script = document.createElement("script");
@@ -356,7 +365,7 @@
         };
 
         const cacheBuster = new Date().getTime();
-        script.src = `${APPS_SCRIPT_URL}?id=${encodeURIComponent(regId)}&callback=${callbackName}&_=${cacheBuster}`;
+        script.src = `${APPS_SCRIPT_URL}?id=${encodeURIComponent(regId)}&action=${action}&callback=${callbackName}&_=${cacheBuster}`;
         document.body.appendChild(script);
       });
     }
@@ -365,7 +374,6 @@
       if (isProcessing) return;
       isProcessing = true;
 
-      // Pause the scanner feed while processing
       if (html5QrCode) {
         try { html5QrCode.pause(); } catch (e) {}
       }
@@ -377,8 +385,10 @@
         regId = regId.split("id=")[1].split("&")[0];
       }
 
+      currentRegId = regId;
+
       try {
-        const resultText = await sendCheckInRequest(regId);
+        const resultText = await sendCheckInRequest(regId, "checkin");
         const isSuccess = resultText.includes("Attendance marked");
         showResultModal(resultText, isSuccess);
       } catch (err) {
