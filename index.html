@@ -16,6 +16,8 @@
       --success-text: #34d399;
       --error-bg: #7f1d1d;
       --error-text: #f87171;
+      --info-bg: #1e3a8a;
+      --info-text: #60a5fa;
     }
 
     * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -253,9 +255,6 @@
 
     .alert-banner {
       pointer-events: auto;
-      background: var(--error-bg);
-      color: #fca5a5;
-      border: 1px solid rgba(248, 113, 113, 0.4);
       padding: 12px 16px;
       border-radius: 14px;
       display: flex;
@@ -267,6 +266,18 @@
       animation: slideUp 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     }
 
+    .alert-banner.error {
+      background: var(--error-bg);
+      color: #fca5a5;
+      border: 1px solid rgba(248, 113, 113, 0.4);
+    }
+
+    .alert-banner.success {
+      background: var(--success-bg);
+      color: #6ee7b7;
+      border: 1px solid rgba(52, 211, 153, 0.4);
+    }
+
     @keyframes slideUp {
       from { transform: translateY(100%); opacity: 0; }
       to { transform: translateY(0); opacity: 1; }
@@ -275,7 +286,7 @@
     .alert-banner .close-btn {
       background: none;
       border: none;
-      color: #fca5a5;
+      color: inherit;
       font-size: 1.25rem;
       font-weight: bold;
       cursor: pointer;
@@ -341,10 +352,10 @@
     const fifoQueue = [];
     let isProcessingQueue = false;
 
-    function showLoadingModal(title = "Checking...", message = "Verifying Registration ID") {
+    function showLoadingModal() {
       modalIcon.innerHTML = `<div class="spinner"></div>`;
-      modalTitle.innerText = title;
-      modalMsg.innerText = message;
+      modalTitle.innerText = "Checking ID";
+      modalMsg.innerText = "Verifying database...";
       modalActions.style.display = "none";
       statusModal.classList.add("active");
     }
@@ -355,7 +366,7 @@
           <div class="icon-circle success">
             <svg viewBox="0 0 24 24" fill="#34d399" width="32" height="32"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
           </div>`;
-        modalTitle.innerText = "Verified!";
+        modalTitle.innerText = "Success";
         btnCancel.style.display = "block";
       } else {
         modalIcon.innerHTML = `
@@ -393,14 +404,11 @@
       const queueIdx = fifoQueue.findIndex(item => item.id === currentRegId);
       if (queueIdx !== -1) fifoQueue.splice(queueIdx, 1);
 
-      showLoadingModal("Cancelling...", "Removing attendance entry...");
+      showResultModal("Removing attendance entry...", false);
 
       try {
-        const resultText = await sendCheckInRequest(currentRegId, "undo");
-        statusDiv.innerText = typeof resultText === "object" ? (resultText.message || "Attendance undone") : resultText;
-      } catch (err) {
-        statusDiv.innerText = "Failed to undo check-in";
-      }
+        await sendCheckInRequest(currentRegId, "undo");
+      } catch (err) {}
 
       setTimeout(() => {
         closeModalAndResume();
@@ -414,8 +422,8 @@
 
         const timeoutId = setTimeout(() => {
           cleanup();
-          reject("Request timed out");
-        }, 12000);
+          reject("REQUEST_TIMEOUT");
+        }, 8000);
 
         function cleanup() {
           clearTimeout(timeoutId);
@@ -446,7 +454,7 @@
         try { html5QrCode.pause(); } catch (e) {}
       }
 
-      showLoadingModal("Verifying ID...", "Checking database...");
+      showLoadingModal();
 
       let regId = decodedText.trim();
       if (regId.includes("id=")) {
@@ -457,30 +465,51 @@
 
       try {
         const response = await sendCheckInRequest(regId, "check");
-        const isSuccess = response && (response.success === true || response.status === "success" || response.status === "already_marked");
-
-        if (isSuccess) {
-          const timestamp = new Date().toISOString();
-          const personName = response.name || response.studentName || "Student";
-          const verifiedId = response.id || regId;
-
-          scannedRecords.push({
-            id: verifiedId,
-            name: personName,
-            timestamp: timestamp
-          });
-
-          fifoQueue.push({ id: verifiedId, name: personName, retries: 0 });
-          processQueue();
-
-          const messageText = response.message || `Verified: ${personName} (${verifiedId})`;
-          showResultModal(messageText, true);
-        } else {
-          const msg = (response && response.message) ? response.message : `ID ${regId} not found.`;
-          showResultModal(msg, false);
-        }
+        handleCheckInResponse(response, regId);
       } catch (err) {
-        showResultModal(`Verification error: ${err}`, false);
+        if (err === "REQUEST_TIMEOUT") {
+          closeModalAndResume();
+          showNotificationBanner(`Lookup timed out for ${regId}. Retrying in background...`, "error");
+          
+          sendCheckInRequest(regId, "check")
+            .then(res => {
+              if (checkIsSuccessful(res)) {
+                showNotificationBanner(`Success: ID ${regId} verified after timeout!`, "success");
+              }
+            })
+            .catch(() => {});
+        } else {
+          showResultModal(`Verification error: ${err}`, false);
+        }
+      }
+    }
+
+    function checkIsSuccessful(response) {
+      if (!response) return false;
+      if (response.success === true || response.marked === true) return true;
+      if (typeof response.status === "string") {
+        const st = response.status.toLowerCase();
+        if (st === "success" || st === "already_marked" || st === "marked" || st === "ok") return true;
+      }
+      return false;
+    }
+
+    function handleCheckInResponse(response, regId) {
+      const isSuccess = checkIsSuccessful(response);
+
+      if (isSuccess) {
+        const timestamp = new Date().toISOString();
+        const personName = response.name || response.studentName || "Student";
+        const verifiedId = response.id || regId;
+
+        scannedRecords.push({ id: verifiedId, name: personName, timestamp: timestamp });
+        fifoQueue.push({ id: verifiedId, name: personName, retries: 0 });
+        processQueue();
+
+        showResultModal("Success", true);
+      } else {
+        const msg = (response && response.message) ? response.message : `ID ${regId} not found.`;
+        showResultModal(msg, false);
       }
     }
 
@@ -492,18 +521,15 @@
 
       try {
         const response = await sendCheckInRequest(item.id, "process");
-        const isSuccess = response && (response.success === true || response.status === "success" || response.status === "already_marked");
-
-        if (isSuccess) {
+        if (checkIsSuccessful(response)) {
           fifoQueue.shift();
         } else {
-          throw new Error(response ? response.message : "Write rejected");
+          throw new Error();
         }
       } catch (err) {
         item.retries++;
         if (item.retries >= 2) {
           fifoQueue.shift();
-          showErrorBanner(`Failed to mark attendance for ${item.name} (${item.id}).`);
         }
       } finally {
         isProcessingQueue = false;
@@ -513,15 +539,19 @@
       }
     }
 
-    function showErrorBanner(message) {
+    function showNotificationBanner(message, type = "error") {
       const container = document.getElementById("error-banner-container");
       const banner = document.createElement("div");
-      banner.className = "alert-banner";
+      banner.className = `alert-banner ${type}`;
       banner.innerHTML = `
-        <span>⚠️ ${message}</span>
+        <span>${type === 'success' ? '✅' : '⚠️'} ${message}</span>
         <button class="close-btn" onclick="this.parentElement.remove()">✕</button>
       `;
       container.appendChild(banner);
+
+      setTimeout(() => {
+        if (banner.parentNode) banner.parentNode.removeChild(banner);
+      }, 6000);
     }
 
     function exportScannedCSV() {
@@ -536,10 +566,8 @@
         csvRows.push(`"${row.id}","${safeName}","${row.timestamp}"`);
       });
 
-      const csvString = csvRows.join("\n");
-      const blob = new Blob([csvString], { type: "text/csv;charset=utf-8;" });
+      const blob = new Blob([csvRows.join("\n")], { type: "text/csv;charset=utf-8;" });
       const url = URL.createObjectURL(blob);
-      
       const link = document.createElement("a");
       link.setAttribute("href", url);
       link.setAttribute("download", `attendance_scans_${new Date().toISOString().slice(0,10)}.csv`);
