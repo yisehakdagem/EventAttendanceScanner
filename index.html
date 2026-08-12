@@ -84,20 +84,14 @@
       border: 1px solid rgba(248, 113, 113, 0.3);
     }
 
-    .status-box.processing {
-      background: #1e1b4b;
-      color: #818cf8;
-      border: 1px solid rgba(129, 140, 248, 0.3);
-    }
-
-    /* Success Modal Overlay */
+    /* Modal Overlay */
     .modal-overlay {
       position: fixed;
       top: 0;
       left: 0;
       width: 100vw;
       height: 100vh;
-      background: rgba(9, 13, 22, 0.75);
+      background: rgba(9, 13, 22, 0.85);
       backdrop-filter: blur(8px);
       display: flex;
       justify-content: center;
@@ -116,7 +110,7 @@
 
     .modal-card {
       background: #1e293b;
-      border: 1px solid rgba(52, 211, 153, 0.3);
+      border: 1px solid rgba(255, 255, 255, 0.1);
       border-radius: 24px;
       padding: 28px 24px;
       text-align: center;
@@ -131,22 +125,45 @@
       transform: scale(1);
     }
 
+    /* Spinner */
+    .spinner {
+      width: 48px;
+      height: 48px;
+      border: 4px solid rgba(56, 189, 248, 0.2);
+      border-left-color: var(--primary);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 16px auto;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
     .icon-circle {
       width: 64px;
       height: 64px;
-      background: var(--success-bg);
       border-radius: 50%;
       display: flex;
       align-items: center;
       justify-content: center;
       margin: 0 auto 16px auto;
+    }
+
+    .icon-circle.success {
+      background: var(--success-bg);
       border: 2px solid var(--success-text);
+    }
+
+    .icon-circle.error {
+      background: var(--error-bg);
+      border: 2px solid var(--error-text);
     }
 
     .icon-circle svg {
       width: 32px;
       height: 32px;
-      fill: var(--success-text);
     }
 
     .modal-title {
@@ -158,9 +175,46 @@
 
     .modal-msg {
       font-size: 0.95rem;
-      color: var(--success-text);
+      color: var(--text-muted);
+      font-weight: 500;
+      margin: 0 0 20px 0;
+      word-break: break-word;
+    }
+
+    /* Action Buttons */
+    .btn-group {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .btn {
+      width: 100%;
+      padding: 12px 16px;
+      border-radius: 12px;
       font-weight: 600;
-      margin: 0;
+      font-size: 0.95rem;
+      border: none;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      color: #0f172a;
+    }
+
+    .btn-primary:active {
+      transform: scale(0.98);
+      opacity: 0.9;
+    }
+
+    .btn-cancel {
+      background: transparent;
+      color: var(--text-muted);
+      font-size: 0.825rem;
+      padding: 6px 12px;
+      text-decoration: underline;
     }
 
     .file-upload-fallback {
@@ -174,7 +228,6 @@
       font-size: 0.75rem;
       text-decoration: underline;
       cursor: pointer;
-      transition: color 0.2s ease;
     }
 
     .file-upload-fallback input { display: none; }
@@ -195,16 +248,17 @@
     <div id="status" class="status-box">Requesting Camera...</div>
   </div>
 
-  <!-- Success Modal -->
-  <div id="successModal" class="modal-overlay">
+  <!-- Unified Interactive Modal -->
+  <div id="statusModal" class="modal-overlay">
     <div class="modal-card">
-      <div class="icon-circle">
-        <svg viewBox="0 0 24 24">
-          <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
-        </svg>
+      <div id="modalIcon"></div>
+      <h3 id="modalTitle" class="modal-title">Checking ID</h3>
+      <p id="modalMsg" class="modal-msg">Verifying with database...</p>
+      
+      <div id="modalActions" class="btn-group" style="display: none;">
+        <button id="btnDone" class="btn btn-primary" onclick="closeModalAndResume()">Done</button>
+        <button id="btnCancel" class="btn btn-cancel" onclick="cancelAttendance()">Don't mark attendance</button>
       </div>
-      <h3 class="modal-title">Success!</h3>
-      <p id="modalMsg" class="modal-msg">Attendance Marked</p>
     </div>
   </div>
 
@@ -218,52 +272,106 @@
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzRQYi29sudHW3Ijq327xzFD7YnUHplUlDXTlnsz4rJ2ovObQURDFXlRtKValOLG2c3/exec";
 
     const statusDiv = document.getElementById("status");
-    const successModal = document.getElementById("successModal");
+    const statusModal = document.getElementById("statusModal");
+    const modalIcon = document.getElementById("modalIcon");
+    const modalTitle = document.getElementById("modalTitle");
     const modalMsg = document.getElementById("modalMsg");
+    const modalActions = document.getElementById("modalActions");
+    const btnCancel = document.getElementById("btnCancel");
 
     let html5QrCode;
-    let isScanning = true;
+    let isProcessing = false;
 
-    function showSuccessModal(message) {
-      modalMsg.innerText = message;
-      successModal.classList.add("active");
-      
-      setTimeout(() => {
-        successModal.classList.remove("active");
-      }, 2000);
+    // Open Modal in Loading State
+    function showLoadingModal() {
+      modalIcon.innerHTML = `<div class="spinner"></div>`;
+      modalTitle.innerText = "Checking... ";
+      modalMsg.innerText = "Verifying Registration ID";
+      modalActions.style.display = "none";
+      statusModal.classList.add("active");
     }
 
-    // Sends cross-origin JSONP request to Apps Script
+    // Update Modal to Complete State (Success / Warning)
+    function showResultModal(message, isSuccess) {
+      if (isSuccess) {
+        modalIcon.innerHTML = `
+          <div class="icon-circle success">
+            <svg viewBox="0 0 24 24" fill="#34d399"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+          </div>`;
+        modalTitle.innerText = "Success!";
+        btnCancel.style.display = "block";
+      } else {
+        modalIcon.innerHTML = `
+          <div class="icon-circle error">
+            <svg viewBox="0 0 24 24" fill="#f87171"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+          </div>`;
+        modalTitle.innerText = "Notice";
+        btnCancel.style.display = "none"; // Hide cancel button if lookup failed or already checked in
+      }
+
+      modalMsg.innerText = message;
+      modalActions.style.display = "flex";
+    }
+
+    function closeModalAndResume() {
+      statusModal.classList.remove("active");
+      if (html5QrCode) {
+        try { html5QrCode.resume(); } catch (e) {}
+      }
+      statusDiv.innerText = "Ready for next scan...";
+      statusDiv.className = "status-box";
+      isProcessing = false;
+    }
+
+    function cancelAttendance() {
+      // Logic space to execute explicit revert if needed
+      closeModalAndResume();
+    }
+
     function sendCheckInRequest(regId) {
       return new Promise((resolve, reject) => {
         const callbackName = "jsonp_callback_" + Math.round(100000 * Math.random());
         const script = document.createElement("script");
 
+        const timeoutId = setTimeout(() => {
+          cleanup();
+          reject("Request timed out");
+        }, 6000);
+
+        function cleanup() {
+          clearTimeout(timeoutId);
+          if (window[callbackName]) delete window[callbackName];
+          if (script.parentNode) script.parentNode.removeChild(script);
+        }
+
         window[callbackName] = function(data) {
-          delete window[callbackName];
-          document.body.removeChild(script);
-          resolve(data.message);
+          cleanup();
+          if (data && data.message) resolve(data.message);
+          else reject("Invalid server response");
         };
 
         script.onerror = function() {
-          delete window[callbackName];
-          document.body.removeChild(script);
-          reject("Network Error: Request failed");
+          cleanup();
+          reject("Network connection failed");
         };
 
-        script.src = `${APPS_SCRIPT_URL}?id=${encodeURIComponent(regId)}&callback=${callbackName}`;
+        const cacheBuster = new Date().getTime();
+        script.src = `${APPS_SCRIPT_URL}?id=${encodeURIComponent(regId)}&callback=${callbackName}&_=${cacheBuster}`;
         document.body.appendChild(script);
       });
     }
 
     async function onScanSuccess(decodedText) {
-      if (!isScanning) return;
-      isScanning = false;
-      
-      statusDiv.className = "status-box processing";
-      statusDiv.innerText = "Checking in...";
+      if (isProcessing) return;
+      isProcessing = true;
 
-      // Clean raw ID input
+      // Pause the scanner feed while processing
+      if (html5QrCode) {
+        try { html5QrCode.pause(); } catch (e) {}
+      }
+
+      showLoadingModal();
+
       let regId = decodedText.trim();
       if (regId.includes("id=")) {
         regId = regId.split("id=")[1].split("&")[0];
@@ -271,28 +379,13 @@
 
       try {
         const resultText = await sendCheckInRequest(regId);
-
-        if (resultText.includes("Attendance marked")) {
-          statusDiv.className = "status-box";
-          statusDiv.innerText = "Check-in successful!";
-          showSuccessModal(resultText);
-        } else {
-          statusDiv.innerText = resultText;
-          statusDiv.className = "status-box error";
-        }
+        const isSuccess = resultText.includes("Attendance marked");
+        showResultModal(resultText, isSuccess);
       } catch (err) {
-        statusDiv.innerText = err;
-        statusDiv.className = "status-box error";
+        showResultModal(err, false);
       }
-
-      setTimeout(() => {
-        statusDiv.className = "status-box";
-        statusDiv.innerText = "Ready for next scan...";
-        isScanning = true;
-      }, 2200);
     }
 
-    // Force back-facing main camera directly
     function startCamera() {
       html5QrCode = new Html5Qrcode("reader");
       const config = { fps: 15, qrbox: { width: 220, height: 220 }, aspectRatio: 1.0 };
@@ -302,7 +395,6 @@
         config, 
         onScanSuccess
       ).catch(() => {
-        // Fallback for devices without strict 'exact' string support
         html5QrCode.start(
           { facingMode: "environment" }, 
           config, 
@@ -310,7 +402,7 @@
         ).then(() => {
           statusDiv.innerText = "Ready to scan...";
         }).catch(() => {
-          statusDiv.innerText = "Camera permission denied or unavailable";
+          statusDiv.innerText = "Camera permission denied";
           statusDiv.className = "status-box error";
         });
       }).then(() => {
@@ -325,7 +417,7 @@
       html5QrCode.scanFile(e.target.files[0], true)
         .then(onScanSuccess)
         .catch(() => {
-          statusDiv.innerText = "Failed to parse QR from image file";
+          statusDiv.innerText = "Failed to parse QR file";
           statusDiv.className = "status-box error";
         });
     });
