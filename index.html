@@ -342,10 +342,11 @@
         const callbackName = "jsonp_callback_" + Math.round(100000 * Math.random());
         const script = document.createElement("script");
 
-        const timeoutId = setTimeout(() => {
-          cleanup();
-          reject("Request timed out");
-        }, 6000);
+        // Change 6000 to 12000 (12 seconds)
+      const timeoutId = setTimeout(() => {
+           cleanup();
+           reject("Request timed out (Check Google Sheet)");
+       }, 12000);
 
         function cleanup() {
           clearTimeout(timeoutId);
