@@ -2,69 +2,443 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Attendance Scanner</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
   <style>
-    body { font-family: sans-serif; padding: 20px; margin: 0; }
-    .btn { padding: 10px 16px; font-size: 14px; cursor: pointer; border: none; border-radius: 4px; background: #007bff; color: white; margin-top: 10px; }
+    :root {
+      --bg: #090d16;
+      --card-bg: #151c2c;
+      --primary: #38bdf8;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --success-bg: #064e3b;
+      --success-text: #34d399;
+      --error-bg: #7f1d1d;
+      --error-text: #f87171;
+    }
+
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
     
-    /* Red Alert Banner at the Bottom */
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      margin: 0;
+      padding: 24px 16px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+    }
+
+    .header { text-align: center; margin-bottom: 20px; }
+    .header h1 { font-size: 1.5rem; margin: 0 0 4px 0; font-weight: 700; letter-spacing: -0.02em; }
+    .header p { color: var(--text-muted); font-size: 0.875rem; margin: 0; }
+
+    .scanner-card {
+      width: 100%;
+      max-width: 420px;
+      background: var(--card-bg);
+      border-radius: 20px;
+      padding: 16px;
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      position: relative;
+    }
+
+    #reader {
+      width: 100%;
+      border-radius: 14px;
+      overflow: hidden;
+      border: none !important;
+    }
+
+    #reader video {
+      border-radius: 14px;
+      object-fit: cover;
+      width: 100% !important;
+    }
+
+    #status-container {
+      margin-top: 16px;
+      width: 100%;
+      max-width: 420px;
+    }
+
+    .status-box {
+      padding: 14px 16px;
+      border-radius: 14px;
+      font-weight: 600;
+      font-size: 0.95rem;
+      text-align: center;
+      transition: all 0.2s ease;
+      background: var(--card-bg);
+      color: var(--text-muted);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .status-box.error {
+      background: var(--error-bg);
+      color: var(--error-text);
+      border: 1px solid rgba(248, 113, 113, 0.3);
+    }
+
+    /* Controls & Export */
+    .action-bar {
+      margin-top: 12px;
+      width: 100%;
+      max-width: 420px;
+      display: flex;
+      justify-content: flex-end;
+    }
+
+    .btn-export {
+      background: rgba(56, 189, 248, 0.1);
+      color: var(--primary);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      padding: 8px 14px;
+      border-radius: 10px;
+      font-size: 0.825rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .btn-export:active {
+      transform: scale(0.97);
+    }
+
+    /* Modal Overlay */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(9, 13, 22, 0.85);
+      backdrop-filter: blur(8px);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 9999;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s ease;
+      padding: 20px;
+    }
+
+    .modal-overlay.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .modal-card {
+      background: #1e293b;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 24px;
+      padding: 28px 24px;
+      text-align: center;
+      width: 100%;
+      max-width: 340px;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6);
+      transform: scale(0.9);
+      transition: transform 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+
+    .modal-overlay.active .modal-card {
+      transform: scale(1);
+    }
+
+    /* Spinner */
+    .spinner {
+      width: 48px;
+      height: 48px;
+      border: 4px solid rgba(56, 189, 248, 0.2);
+      border-left-color: var(--primary);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 16px auto;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .icon-circle {
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 16px auto;
+    }
+
+    .icon-circle.success {
+      background: var(--success-bg);
+      border: 2px solid var(--success-text);
+    }
+
+    .icon-circle.error {
+      background: var(--error-bg);
+      border: 2px solid var(--error-text);
+    }
+
+    .modal-title {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: #ffffff;
+      margin: 0 0 8px 0;
+    }
+
+    .modal-msg {
+      font-size: 0.95rem;
+      color: var(--text-muted);
+      font-weight: 500;
+      margin: 0 0 20px 0;
+      word-break: break-word;
+    }
+
+    /* Action Buttons */
+    .btn-group {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .btn {
+      width: 100%;
+      padding: 12px 16px;
+      border-radius: 12px;
+      font-weight: 600;
+      font-size: 0.95rem;
+      border: none;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      color: #0f172a;
+    }
+
+    .btn-primary:active {
+      transform: scale(0.98);
+      opacity: 0.9;
+    }
+
+    .btn-cancel {
+      background: transparent;
+      color: var(--text-muted);
+      font-size: 0.825rem;
+      padding: 6px 12px;
+      text-decoration: underline;
+      border: none;
+      cursor: pointer;
+    }
+
+    .file-upload-fallback {
+      margin-top: auto;
+      padding-top: 32px;
+      text-align: center;
+    }
+
+    .file-upload-fallback label {
+      color: #475569;
+      font-size: 0.75rem;
+      text-decoration: underline;
+      cursor: pointer;
+    }
+
+    .file-upload-fallback input { display: none; }
+
+    /* Sticky Bottom Error Banners */
     #error-banner-container {
       position: fixed;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      z-index: 9999;
+      bottom: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: calc(100% - 32px);
+      max-width: 420px;
+      z-index: 10000;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      pointer-events: none;
     }
+
     .alert-banner {
-      background-color: #d32f2f;
-      color: white;
+      pointer-events: auto;
+      background: var(--error-bg);
+      color: #fca5a5;
+      border: 1px solid rgba(248, 113, 113, 0.4);
       padding: 12px 16px;
+      border-radius: 14px;
       display: flex;
       justify-content: space-between;
       align-items: center;
-      box-shadow: 0 -2px 10px rgba(0,0,0,0.2);
-      margin-top: 2px;
-      font-size: 14px;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+      font-size: 0.875rem;
+      font-weight: 500;
+      animation: slideUp 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     }
+
+    @keyframes slideUp {
+      from { transform: translateY(100%); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+
     .alert-banner .close-btn {
       background: none;
       border: none;
-      color: white;
-      font-size: 18px;
+      color: #fca5a5;
+      font-size: 1.25rem;
       font-weight: bold;
       cursor: pointer;
-      margin-left: 12px;
+      padding: 0 0 0 12px;
+      line-height: 1;
     }
   </style>
 </head>
 <body>
 
-  <h2>Attendance Scanner</h2>
-  <button class="btn" onclick="exportScannedCSV()">Export Scanned IDs (CSV)</button>
+  <div class="header">
+    <h1>Event Attendance</h1>
+    <p>Point camera at student QR code</p>
+  </div>
+
+  <div class="scanner-card">
+    <div id="reader"></div>
+  </div>
+
+  <div id="status-container">
+    <div id="status" class="status-box">Requesting Camera...</div>
+  </div>
+
+  <div class="action-bar">
+    <button class="btn-export" onclick="exportScannedCSV()">📥 Export Scanned IDs (CSV)</button>
+  </div>
+
+  <!-- Unified Interactive Modal -->
+  <div id="statusModal" class="modal-overlay">
+    <div class="modal-card">
+      <div id="modalIcon"></div>
+      <h3 id="modalTitle" class="modal-title">Checking ID</h3>
+      <p id="modalMsg" class="modal-msg">Verifying with database...</p>
+      
+      <div id="modalActions" class="btn-group" style="display: none;">
+        <button id="btnDone" class="btn btn-primary" onclick="closeModalAndResume()">Done</button>
+        <button id="btnCancel" class="btn btn-cancel" onclick="cancelAttendance()">Don't mark attendance</button>
+      </div>
+    </div>
+  </div>
 
   <div id="error-banner-container"></div>
 
-  <script>
-    const APPS_SCRIPT_URL = "YOUR_APPS_SCRIPT_DEPLOYMENT_URL_HERE";
+  <div class="file-upload-fallback">
+    <label for="hidden-file-input">Scan from image file instead</label>
+    <input type="file" id="hidden-file-input" accept="image/*">
+  </div>
 
-    // Session log for verified scans
-    const scannedRecords = []; // Stores { id, name, timestamp }
-    
-    // Client-side FIFO Queue
-    const fifoQueue = [];
+  <script>
+    const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzRQYi29sudHW3Ijq327xzFD7YnUHplUlDXTlnsz4rJ2ovObQURDFXlRtKValOLG2c3/exec";
+
+    const statusDiv = document.getElementById("status");
+    const statusModal = document.getElementById("statusModal");
+    const modalIcon = document.getElementById("modalIcon");
+    const modalTitle = document.getElementById("modalTitle");
+    const modalMsg = document.getElementById("modalMsg");
+    const modalActions = document.getElementById("modalActions");
+    const btnCancel = document.getElementById("btnCancel");
+
+    let html5QrCode;
+    let isProcessing = false;
+    let currentRegId = "";
+
+    // Data structures for Session Memory & FIFO Queue
+    const scannedRecords = []; // Stores { id, name, timestamp } ordered by time
+    const fifoQueue = [];      // Background write queue { id, name, retries }
     let isProcessingQueue = false;
 
-    // Helper for JSONP requests
-    function sendJsonpRequest(urlParams, timeoutMs = 10000) {
+    function showLoadingModal(title = "Checking...", message = "Verifying Registration ID") {
+      modalIcon.innerHTML = `<div class="spinner"></div>`;
+      modalTitle.innerText = title;
+      modalMsg.innerText = message;
+      modalActions.style.display = "none";
+      statusModal.classList.add("active");
+    }
+
+    function showResultModal(message, isSuccess) {
+      if (isSuccess) {
+        modalIcon.innerHTML = `
+          <div class="icon-circle success">
+            <svg viewBox="0 0 24 24" fill="#34d399" width="32" height="32"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+          </div>`;
+        modalTitle.innerText = "Verified!";
+        btnCancel.style.display = "block";
+      } else {
+        modalIcon.innerHTML = `
+          <div class="icon-circle error">
+            <svg viewBox="0 0 24 24" fill="#f87171" width="32" height="32"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+          </div>`;
+        modalTitle.innerText = "Notice";
+        btnCancel.style.display = "none";
+      }
+
+      modalMsg.innerText = message;
+      modalActions.style.display = "flex";
+    }
+
+    function closeModalAndResume() {
+      statusModal.classList.remove("active");
+      if (html5QrCode) {
+        try { html5QrCode.resume(); } catch (e) {}
+      }
+      statusDiv.innerText = "Ready for next scan...";
+      statusDiv.className = "status-box";
+      isProcessing = false;
+      currentRegId = "";
+    }
+
+    async function cancelAttendance() {
+      if (!currentRegId) {
+        closeModalAndResume();
+        return;
+      }
+
+      // Remove from frontend scanned log if user cancels
+      const recordIdx = scannedRecords.findIndex(r => r.id === currentRegId);
+      if (recordIdx !== -1) scannedRecords.splice(recordIdx, 1);
+
+      // Remove from pending write queue if not processed yet
+      const queueIdx = fifoQueue.findIndex(item => item.id === currentRegId);
+      if (queueIdx !== -1) fifoQueue.splice(queueIdx, 1);
+
+      showLoadingModal("Cancelling...", "Removing attendance entry...");
+
+      try {
+        const resultText = await sendCheckInRequest(currentRegId, "undo");
+        statusDiv.innerText = resultText;
+      } catch (err) {
+        statusDiv.innerText = "Failed to undo check-in";
+      }
+
+      setTimeout(() => {
+        closeModalAndResume();
+      }, 1000);
+    }
+
+    function sendCheckInRequest(regId, action = "check") {
       return new Promise((resolve, reject) => {
-        const callbackName = "jsonp_cb_" + Math.round(100000 * Math.random());
+        const callbackName = "jsonp_callback_" + Math.round(100000 * Math.random());
         const script = document.createElement("script");
 
         const timeoutId = setTimeout(() => {
           cleanup();
           reject("Request timed out");
-        }, timeoutMs);
+        }, 12000);
 
         function cleanup() {
           clearTimeout(timeoutId);
@@ -79,75 +453,91 @@
 
         script.onerror = function() {
           cleanup();
-          reject("Network error");
+          reject("Network connection failed");
         };
 
         const cacheBuster = new Date().getTime();
-        script.src = `${APPS_SCRIPT_URL}?${urlParams}&callback=${callbackName}&_=${cacheBuster}`;
+        script.src = `${APPS_SCRIPT_URL}?id=${encodeURIComponent(regId)}&action=${action}&callback=${callbackName}&_=${cacheBuster}`;
         document.body.appendChild(script);
       });
     }
 
-    // Called immediately when QR code is scanned
-    async function onQrCodeScanned(scannedId) {
-      try {
-        // Step 1: Quick ID verification check (~1 sec)
-        const response = await sendJsonpRequest(`id=${encodeURIComponent(scannedId)}&action=check`, 5000);
+    async function onScanSuccess(decodedText) {
+      if (isProcessing) return;
+      isProcessing = true;
 
+      if (html5QrCode) {
+        try { html5QrCode.pause(); } catch (e) {}
+      }
+
+      showLoadingModal("Verifying ID...", "Checking database...");
+
+      let regId = decodedText.trim();
+      if (regId.includes("id=")) {
+        regId = regId.split("id=")[1].split("&")[0];
+      }
+
+      currentRegId = regId;
+
+      try {
+        // Step 1: Ultra-fast verification check
+        const response = await sendCheckInRequest(regId, "check");
+        
         if (response && response.success) {
           const timestamp = new Date().toISOString();
-          
-          // Step 2: Save to local session log for export
+          const personName = response.name || "Student";
+
+          // Log locally immediately for export
           scannedRecords.push({
             id: response.id,
-            name: response.name,
+            name: personName,
             timestamp: timestamp
           });
 
-          // Step 3: Push to FIFO Queue for background writing
-          fifoQueue.push({ id: response.id, name: response.name, retries: 0 });
+          // Queue background Google Sheet write operation
+          fifoQueue.push({ id: response.id, name: personName, retries: 0 });
           processQueue();
 
-          return `Verified: ${response.name}`;
+          showResultModal(`Verified: ${personName} (${response.id})`, true);
         } else {
-          showErrorBanner(`ID ${scannedId} not found in registration list.`);
+          const msg = (response && response.message) ? response.message : `ID ${regId} not found.`;
+          showResultModal(msg, false);
         }
       } catch (err) {
-        showErrorBanner(`Failed to verify ID ${scannedId}: ${err}`);
+        showResultModal(`Verification error: ${err}`, false);
       }
     }
 
-    // Background Queue Worker
+    // FIFO Queue Worker for Google Sheet Writes
     async function processQueue() {
       if (isProcessingQueue || fifoQueue.length === 0) return;
       isProcessingQueue = true;
 
-      const item = fifoQueue[0]; // Peek at front of FIFO queue
+      const item = fifoQueue[0];
 
       try {
-        // Long-running write operation
-        const response = await sendJsonpRequest(`id=${encodeURIComponent(item.id)}&action=process`, 15000);
+        const response = await sendCheckInRequest(item.id, "process");
         
         if (response && response.message && !response.message.startsWith("Error")) {
-          fifoQueue.shift(); // Remove from queue on success
+          fifoQueue.shift(); // Success: remove from queue
         } else {
-          throw new Error(response ? response.message : "Write failed");
+          throw new Error(response ? response.message : "Write rejected");
         }
       } catch (err) {
         item.retries++;
-        if (item.retries >= 2) { // Fail after 2 retries
-          fifoQueue.shift();
-          showErrorBanner(`Failed to mark attendance for ${item.name} (ID: ${item.id}).`);
+        if (item.retries >= 2) {
+          fifoQueue.shift(); // Max retries hit: remove and notify scanner
+          showErrorBanner(`Failed to mark attendance for ${item.name} (${item.id}).`);
         }
       } finally {
         isProcessingQueue = false;
         if (fifoQueue.length > 0) {
-          processQueue(); // Process next item in FIFO order
+          processQueue();
         }
       }
     }
 
-    // Display Red Notification Banner
+    // Red Sticky Bottom Alert Banner
     function showErrorBanner(message) {
       const container = document.getElementById("error-banner-container");
       const banner = document.createElement("div");
@@ -159,26 +549,62 @@
       container.appendChild(banner);
     }
 
-    // Export scanned records as CSV ordered by time
+    // CSV Exporter ordered by time scanned
     function exportScannedCSV() {
       if (scannedRecords.length === 0) {
-        alert("No scanned records available to export.");
+        alert("No scanned records available to export yet.");
         return;
       }
 
-      let csvContent = "data:text/csv;charset=utf-8,ID,Name,Timestamp\n";
+      let csvContent = "data:text/csv;charset=utf-8,ID,Name,Scan Timestamp\n";
       scannedRecords.forEach(row => {
-        csvContent += `"${row.id}","${row.name}","${row.timestamp}"\n`;
+        csvContent += `"${row.id}","${row.name.replace(/"/g, '""')}","${row.timestamp}"\n`;
       });
 
       const encodedUri = encodeURI(csvContent);
       const link = document.createElement("a");
       link.setAttribute("href", encodedUri);
-      link.setAttribute("download", `scanned_attendance_${new Date().toISOString().slice(0,10)}.csv`);
+      link.setAttribute("download", `attendance_scans_${new Date().toISOString().slice(0,10)}.csv`);
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
     }
+
+    function startCamera() {
+      html5QrCode = new Html5Qrcode("reader");
+      const config = { fps: 15, qrbox: { width: 220, height: 220 }, aspectRatio: 1.0 };
+
+      html5QrCode.start(
+        { facingMode: { exact: "environment" } }, 
+        config, 
+        onScanSuccess
+      ).catch(() => {
+        html5QrCode.start(
+          { facingMode: "environment" }, 
+          config, 
+          onScanSuccess
+        ).then(() => {
+          statusDiv.innerText = "Ready to scan...";
+        }).catch(() => {
+          statusDiv.innerText = "Camera permission denied";
+          statusDiv.className = "status-box error";
+        });
+      }).then(() => {
+        statusDiv.innerText = "Ready to scan...";
+      });
+    }
+
+    startCamera();
+
+    document.getElementById("hidden-file-input").addEventListener("change", (e) => {
+      if (e.target.files.length === 0) return;
+      html5QrCode.scanFile(e.target.files[0], true)
+        .then(onScanSuccess)
+        .catch(() => {
+          statusDiv.innerText = "Failed to parse QR file";
+          statusDiv.className = "status-box error";
+        });
+    });
   </script>
 </body>
 </html>
