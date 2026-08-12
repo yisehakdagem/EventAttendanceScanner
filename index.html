@@ -84,7 +84,6 @@
       border: 1px solid rgba(248, 113, 113, 0.3);
     }
 
-    /* Bottom Action Controls */
     .bottom-controls {
       margin-top: auto;
       padding-top: 24px;
@@ -109,24 +108,17 @@
       width: 100%;
     }
 
-    .btn-export:active {
-      transform: scale(0.98);
-    }
+    .btn-export:active { transform: scale(0.98); }
 
-    .file-upload-fallback {
-      text-align: center;
-    }
-
+    .file-upload-fallback { text-align: center; }
     .file-upload-fallback label {
       color: #475569;
       font-size: 0.75rem;
       text-decoration: underline;
       cursor: pointer;
     }
-
     .file-upload-fallback input { display: none; }
 
-    /* Modal Overlay */
     .modal-overlay {
       position: fixed;
       top: 0;
@@ -163,11 +155,8 @@
       transition: transform 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     }
 
-    .modal-overlay.active .modal-card {
-      transform: scale(1);
-    }
+    .modal-overlay.active .modal-card { transform: scale(1); }
 
-    /* Spinner */
     .spinner {
       width: 48px;
       height: 48px;
@@ -218,7 +207,6 @@
       word-break: break-word;
     }
 
-    /* Action Buttons */
     .btn-group {
       display: flex;
       flex-direction: column;
@@ -236,15 +224,8 @@
       transition: all 0.2s ease;
     }
 
-    .btn-primary {
-      background: var(--primary);
-      color: #0f172a;
-    }
-
-    .btn-primary:active {
-      transform: scale(0.98);
-      opacity: 0.9;
-    }
+    .btn-primary { background: var(--primary); color: #0f172a; }
+    .btn-primary:active { transform: scale(0.98); opacity: 0.9; }
 
     .btn-cancel {
       background: transparent;
@@ -256,7 +237,6 @@
       cursor: pointer;
     }
 
-    /* Sticky Bottom Error Banners */
     #error-banner-container {
       position: fixed;
       bottom: 12px;
@@ -319,17 +299,14 @@
     <div id="status" class="status-box">Requesting Camera...</div>
   </div>
 
-  <!-- Bottom Container -->
   <div class="bottom-controls">
     <button class="btn-export" onclick="exportScannedCSV()">Export Scanned IDs (CSV)</button>
-    
     <div class="file-upload-fallback">
       <label for="hidden-file-input">Scan from image file instead</label>
       <input type="file" id="hidden-file-input" accept="image/*">
     </div>
   </div>
 
-  <!-- Unified Interactive Modal -->
   <div id="statusModal" class="modal-overlay">
     <div class="modal-card">
       <div id="modalIcon"></div>
@@ -360,7 +337,6 @@
     let isProcessing = false;
     let currentRegId = "";
 
-    // Session Memory & Queue Structures
     const scannedRecords = [];
     const fifoQueue = [];
     let isProcessingQueue = false;
@@ -433,7 +409,7 @@
 
     function sendCheckInRequest(regId, action = "check") {
       return new Promise((resolve, reject) => {
-        const callbackName = "jsonp_callback_" + Math.round(100000 * Math.random());
+        const callbackName = "jsonp_cb_" + Date.now() + "_" + Math.floor(Math.random() * 10000);
         const script = document.createElement("script");
 
         const timeoutId = setTimeout(() => {
@@ -457,8 +433,7 @@
           reject("Network connection failed");
         };
 
-        const cacheBuster = new Date().getTime();
-        script.src = `${APPS_SCRIPT_URL}?id=${encodeURIComponent(regId)}&action=${action}&callback=${callbackName}&_=${cacheBuster}`;
+        script.src = `${APPS_SCRIPT_URL}?id=${encodeURIComponent(regId)}&action=${action}&callback=${callbackName}&_=${Date.now()}`;
         document.body.appendChild(script);
       });
     }
@@ -482,8 +457,6 @@
 
       try {
         const response = await sendCheckInRequest(regId, "check");
-        
-        // Comprehensive check for success state
         const isSuccess = response && (response.success === true || response.status === "success" || response.status === "already_marked");
 
         if (isSuccess) {
@@ -491,14 +464,12 @@
           const personName = response.name || response.studentName || "Student";
           const verifiedId = response.id || regId;
 
-          // Log locally immediately for CSV Export
           scannedRecords.push({
             id: verifiedId,
             name: personName,
             timestamp: timestamp
           });
 
-          // Queue background Google Sheet write
           fifoQueue.push({ id: verifiedId, name: personName, retries: 0 });
           processQueue();
 
@@ -559,43 +530,41 @@
         return;
       }
 
-      let csvContent = "data:text/csv;charset=utf-8,ID,Name,Scan Timestamp\n";
+      let csvRows = ["ID,Name,Scan Timestamp"];
       scannedRecords.forEach(row => {
         const safeName = (row.name || "Student").replace(/"/g, '""');
-        csvContent += `"${row.id}","${safeName}","${row.timestamp}"\n`;
+        csvRows.push(`"${row.id}","${safeName}","${row.timestamp}"`);
       });
 
-      const encodedUri = encodeURI(csvContent);
+      const csvString = csvRows.join("\n");
+      const blob = new Blob([csvString], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      
       const link = document.createElement("a");
-      link.setAttribute("href", encodedUri);
+      link.setAttribute("href", url);
       link.setAttribute("download", `attendance_scans_${new Date().toISOString().slice(0,10)}.csv`);
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      URL.revokeObjectURL(url);
     }
 
-    function startCamera() {
+    async function startCamera() {
       html5QrCode = new Html5Qrcode("reader");
       const config = { fps: 15, qrbox: { width: 220, height: 220 }, aspectRatio: 1.0 };
 
-      html5QrCode.start(
-        { facingMode: { exact: "environment" } }, 
-        config, 
-        onScanSuccess
-      ).catch(() => {
-        html5QrCode.start(
-          { facingMode: "environment" }, 
-          config, 
-          onScanSuccess
-        ).then(() => {
+      try {
+        await html5QrCode.start({ facingMode: { exact: "environment" } }, config, onScanSuccess);
+        statusDiv.innerText = "Ready to scan...";
+      } catch (e1) {
+        try {
+          await html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess);
           statusDiv.innerText = "Ready to scan...";
-        }).catch(() => {
+        } catch (e2) {
           statusDiv.innerText = "Camera permission denied";
           statusDiv.className = "status-box error";
-        });
-      }).then(() => {
-        statusDiv.innerText = "Ready to scan...";
-      });
+        }
+      }
     }
 
     startCamera();
