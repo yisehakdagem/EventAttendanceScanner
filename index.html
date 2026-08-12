@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Event Attendance Scanner</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; text-align: center; padding: 15px; margin: 0; background: #f4f4f9; }
+    #reader { width: 100%; max-width: 400px; margin: auto; border-radius: 8px; overflow: hidden; }
+    #status { margin-top: 15px; font-weight: bold; font-size: 1.1rem; min-height: 2em; padding: 10px; border-radius: 5px; }
+    .success { background: #d4edda; color: #155724; }
+    .error { background: #f8d7da; color: #721c24; }
+  </style>
+</head>
+<body>
+  <h2>Event Attendance Scanner</h2>
+  <div id="reader"></div>
+  <div id="status">Starting camera...</div>
+
+  <script>
+    const statusDiv = document.getElementById("status");
+
+    // Replace this with your exact Apps Script Web App Deployment URL
+    const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzRQYi29sudHW3Ijq327xzFD7YnUHplUlDXTlnsz4rJ2ovObQURDFXlRtKValOLG2c3/exec";
+
+    async function onScanSuccess(decodedText) {
+      html5QrcodeScanner.pause();
+      statusDiv.className = "";
+      statusDiv.innerText = "Processing check-in...";
+
+      // Extract Registration ID from URL if scanned as full link, or use direct text ID
+      let regId = decodedText;
+      if (decodedText.includes("id=")) {
+        regId = decodedText.split("id=")[1].split("&")[0];
+      }
+
+      try {
+        const targetUrl = `${APPS_SCRIPT_URL}?id=${encodeURIComponent(regId)}`;
+        const response = await fetch(targetUrl, { redirect: "follow" });
+        const resultText = await response.text();
+
+        statusDiv.innerText = resultText;
+        statusDiv.className = resultText.includes("Attendance marked") ? "success" : "error";
+      } catch (err) {
+        statusDiv.innerText = "Network / Request Error. Please retry.";
+        statusDiv.className = "error";
+      }
+
+      setTimeout(() => {
+        statusDiv.className = "";
+        statusDiv.innerText = "Ready for next scan...";
+        html5QrcodeScanner.resume();
+      }, 2000);
+    }
+
+    const html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 });
+    html5QrcodeScanner.render(onScanSuccess);
+  </script>
+</body>
+</html>
