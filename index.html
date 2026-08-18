@@ -345,8 +345,7 @@
       <button class="btn-secondary" onclick="showMarkedIDsModal()">Marked IDs</button>
     </div>
     <div class="file-upload-fallback">
-      <label for="hidden-file-input">Scan from image file instead</label>
-      <input type="file" id="hidden-file-input" accept="image/*">
+      <label onclick="showManualEntryModal()">Enter ID manually</label>
     </div>
   </div>
 
@@ -497,6 +496,13 @@
 
     if (!regId) return;
 
+    processId(regId);
+  }
+
+  // Shared entry point for both camera-scanned IDs and manually entered IDs.
+  function processId(regId) {
+    if (isProcessingScan) return;
+
     isProcessingScan = true;
 
     if (isAlreadyScannedLocally(regId)) {
@@ -505,6 +511,55 @@
     }
 
     showScanConfirmationModal(regId);
+  }
+
+  // ── Manual ID Entry ──────────────────────────────────────────
+
+  const MANUAL_ID_PREFIX = "AYAC2026-";
+
+  function showManualEntryModal() {
+    const container = document.getElementById("modal-container");
+    container.innerHTML = `
+      <div class="modal-overlay">
+        <div class="modal-card">
+          <h3 class="modal-title">Enter ID</h3>
+          <div class="modal-body">
+            <label for="manual-id-input" style="display:block;margin-bottom:8px;">ID</label>
+            <div style="display:flex;align-items:center;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:10px 12px;">
+              <span style="color:var(--text-muted);white-space:nowrap;">${MANUAL_ID_PREFIX}</span>
+              <input
+                type="text"
+                id="manual-id-input"
+                inputmode="numeric"
+                pattern="[0-9]*"
+                maxlength="4"
+                placeholder="0000"
+                style="flex:1;min-width:0;background:transparent;border:none;outline:none;color:var(--text);font-size:1rem;margin-left:2px;"
+                oninput="this.value = this.value.replace(/[^0-9]/g, '').slice(0, 4);"
+              />
+            </div>
+          </div>
+          <div class="modal-actions-stacked">
+            <button class="btn-modal btn-modal-primary" onclick="submitManualId()">Continue</button>
+            <button class="btn-modal btn-modal-cancel btn-modal-cancel-sm" onclick="closeModal()">Cancel</button>
+          </div>
+        </div>
+      </div>
+    `;
+    document.getElementById("manual-id-input").focus();
+  }
+
+  function submitManualId() {
+    const input = document.getElementById("manual-id-input");
+    const digits = input.value.replace(/[^0-9]/g, '');
+
+    if (digits.length !== 4) {
+      alert("Please enter exactly 4 digits.");
+      return;
+    }
+
+    const fullId = MANUAL_ID_PREFIX + digits;
+    processId(fullId);
   }
 
   // ── Modal UI System ────────────────────────────────────────
@@ -819,16 +874,6 @@
   }
 
   startCamera();
-
-  document.getElementById("hidden-file-input").addEventListener("change", (e) => {
-    if (e.target.files.length === 0) return;
-    html5QrCode.scanFile(e.target.files[0], true)
-      .then(onScanSuccess)
-      .catch(() => {
-        statusDiv.innerText = "Failed to parse QR file";
-        statusDiv.className = "status-box error";
-      });
-  });
 
   // Attempt to flush any pending IDs left over from a previous session.
   flushPending();
