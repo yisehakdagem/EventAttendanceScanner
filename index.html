@@ -97,7 +97,13 @@
       gap: 12px;
     }
 
-    .btn-export {
+    .button-group {
+      display: flex;
+      gap: 10px;
+      width: 100%;
+    }
+
+    .btn-export, .btn-secondary {
       background: rgba(56, 189, 248, 0.1);
       color: var(--primary);
       border: 1px solid rgba(56, 189, 248, 0.3);
@@ -107,10 +113,11 @@
       font-weight: 600;
       cursor: pointer;
       transition: all 0.2s ease;
-      width: 100%;
+      flex: 1;
+      text-align: center;
     }
 
-    .btn-export:active { transform: scale(0.98); }
+    .btn-export:active, .btn-secondary:active { transform: scale(0.98); }
 
     .file-upload-fallback { text-align: center; }
     .file-upload-fallback label {
@@ -121,59 +128,109 @@
     }
     .file-upload-fallback input { display: none; }
 
-    #error-banner-container {
+    /* Modal Overlay and Dialog Styles */
+    .modal-overlay {
       position: fixed;
-      bottom: 12px;
-      left: 50%;
-      transform: translateX(-50%);
-      width: calc(100% - 32px);
-      max-width: 420px;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.7);
+      display: flex;
+      align-items: center;
+      justify-content: center;
       z-index: 10000;
+      padding: 16px;
+    }
+
+    .modal-card {
+      background: var(--card-bg);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 20px;
+      padding: 20px;
+      width: 100%;
+      max-width: 380px;
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .modal-title {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--text);
+      margin: 0;
+    }
+
+    .modal-body {
+      font-size: 0.95rem;
+      color: var(--text-muted);
+      line-height: 1.4;
+      word-break: break-word;
+    }
+
+    .modal-body strong {
+      color: var(--text);
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 10px;
+      width: 100%;
+    }
+
+    .btn-modal {
+      flex: 1;
+      padding: 12px;
+      border-radius: 12px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      transition: all 0.2s ease;
+    }
+
+    .btn-modal:active { transform: scale(0.98); }
+
+    .btn-modal-primary {
+      background: var(--primary);
+      color: #000;
+    }
+
+    .btn-modal-cancel {
+      background: rgba(255, 255, 255, 0.1);
+      color: var(--text);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .marked-list {
+      max-height: 240px;
+      overflow-y: auto;
       display: flex;
       flex-direction: column;
       gap: 8px;
-      pointer-events: none;
+      margin-top: 8px;
     }
 
-    .alert-banner {
-      pointer-events: auto;
-      padding: 12px 16px;
-      border-radius: 14px;
+    .marked-item {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      padding: 10px 12px;
+      border-radius: 8px;
       display: flex;
       justify-content: space-between;
-      align-items: center;
-      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
-      font-size: 0.875rem;
-      font-weight: 500;
-      animation: slideUp 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      font-size: 0.85rem;
     }
 
-    .alert-banner.error {
-      background: var(--error-bg);
-      color: #fca5a5;
-      border: 1px solid rgba(248, 113, 113, 0.4);
+    .marked-item-id {
+      font-weight: 600;
+      color: var(--text);
     }
 
-    .alert-banner.success {
-      background: var(--success-bg);
-      color: #6ee7b7;
-      border: 1px solid rgba(52, 211, 153, 0.4);
-    }
-
-    @keyframes slideUp {
-      from { transform: translateY(100%); opacity: 0; }
-      to { transform: translateY(0); opacity: 1; }
-    }
-
-    .alert-banner .close-btn {
-      background: none;
-      border: none;
-      color: inherit;
-      font-size: 1.25rem;
-      font-weight: bold;
-      cursor: pointer;
-      padding: 0 0 0 12px;
-      line-height: 1;
+    .marked-item-time {
+      color: var(--text-muted);
+      font-size: 0.75rem;
     }
   </style>
 </head>
@@ -193,14 +250,17 @@
   </div>
 
   <div class="bottom-controls">
-    <button class="btn-export" onclick="exportScannedCSV()">Export Scanned IDs (CSV)</button>
+    <div class="button-group">
+      <button class="btn-export" onclick="showExportChoiceModal()">Export Scanned IDs</button>
+      <button class="btn-secondary" onclick="showMarkedIDsModal()">Marked IDs</button>
+    </div>
     <div class="file-upload-fallback">
       <label for="hidden-file-input">Scan from image file instead</label>
       <input type="file" id="hidden-file-input" accept="image/*">
     </div>
   </div>
 
-  <div id="error-banner-container"></div>
+  <div id="modal-container"></div>
 
 <script>
   const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzRQYi29sudHW3Ijq327xzFD7YnUHplUlDXTlnsz4rJ2ovObQURDFXlRtKValOLG2c3/exec";
@@ -208,6 +268,7 @@
 
   const statusDiv = document.getElementById("status");
   let html5QrCode;
+  let isProcessingScan = false;
 
   // ── Local Persistence Helper Functions ─────────────────────
 
@@ -248,6 +309,8 @@
   // ── QR Scanner Logic ───────────────────────────────────────
 
   function onScanSuccess(decodedText) {
+    if (isProcessingScan) return;
+
     let regId = decodedText.trim();
     if (regId.includes("id=")) {
       regId = regId.split("id=")[1].split("&")[0];
@@ -256,11 +319,44 @@
 
     if (!regId) return;
 
+    isProcessingScan = true;
+
     if (isAlreadyScannedLocally(regId)) {
-      showNotificationBanner(`ID ${regId} already scanned locally today.`, "error");
+      showNoticeModal("Already Scanned", `ID ${regId} has already been scanned locally.`);
       return;
     }
 
+    showScanConfirmationModal(regId);
+  }
+
+  // ── Modal UI System ────────────────────────────────────────
+
+  function closeModal() {
+    const container = document.getElementById("modal-container");
+    container.innerHTML = "";
+    isProcessingScan = false;
+  }
+
+  function showScanConfirmationModal(regId) {
+    const container = document.getElementById("modal-container");
+    container.innerHTML = `
+      <div class="modal-overlay">
+        <div class="modal-card">
+          <h3 class="modal-title">Confirm Attendance</h3>
+          <div class="modal-body">
+            Scanned ID: <strong>${regId}</strong><br>
+            Do you want to mark attendance for this ID?
+          </div>
+          <div class="modal-actions">
+            <button class="btn-modal btn-modal-primary" onclick="confirmMarkAttendance('${regId}')">Mark Attendance</button>
+            <button class="btn-modal btn-modal-cancel" onclick="closeModal()">Cancel</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function confirmMarkAttendance(regId) {
     const timestamp = new Date().toISOString();
 
     // 1. Store locally immediately
@@ -269,49 +365,124 @@
     // 2. Dispatch request asynchronously without waiting
     sendCheckInAsync(regId, "process");
 
-    // 3. Update UI and continue scanning instantly
-    showNotificationBanner(`Scanned ID: ${regId}`, "success");
+    // 3. Update UI and resume scanner
     statusDiv.innerText = `Last scanned: ${regId}`;
     statusDiv.className = "status-box";
+    closeModal();
   }
 
-  function showNotificationBanner(message, type = "error") {
-    const container = document.getElementById("error-banner-container");
-    const banner = document.createElement("div");
-    banner.className = `alert-banner ${type}`;
-    banner.innerHTML = `
-      <span>${type === 'success' ? '✅' : '⚠️'} ${message}</span>
-      <button class="close-btn" onclick="this.parentElement.remove()">✕</button>
+  function showNoticeModal(title, message) {
+    const container = document.getElementById("modal-container");
+    container.innerHTML = `
+      <div class="modal-overlay">
+        <div class="modal-card">
+          <h3 class="modal-title">${title}</h3>
+          <div class="modal-body">${message}</div>
+          <div class="modal-actions">
+            <button class="btn-modal btn-modal-cancel" onclick="closeModal()">Close</button>
+          </div>
+        </div>
+      </div>
     `;
-    container.appendChild(banner);
-
-    setTimeout(() => {
-      if (banner.parentNode) banner.parentNode.removeChild(banner);
-    }, 3000);
   }
 
-  function exportScannedCSV() {
+  function showMarkedIDsModal() {
+    const records = loadLocalRecords();
+    const container = document.getElementById("modal-container");
+
+    let listHtml = "";
+    if (records.length === 0) {
+      listHtml = `<div class="modal-body">No IDs marked yet.</div>`;
+    } else {
+      listHtml = `<div class="marked-list">` + records.map(r => {
+        const timeStr = new Date(r.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        return `
+          <div class="marked-item">
+            <span class="marked-item-id">${r.id}</span>
+            <span class="marked-item-time">${timeStr}</span>
+          </div>
+        `;
+      }).reverse().join('') + `</div>`;
+    }
+
+    container.innerHTML = `
+      <div class="modal-overlay">
+        <div class="modal-card">
+          <h3 class="modal-title">Marked IDs (${records.length})</h3>
+          ${listHtml}
+          <div class="modal-actions">
+            <button class="btn-modal btn-modal-cancel" onclick="closeModal()">Close</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function showExportChoiceModal() {
     const records = loadLocalRecords();
     if (!records || records.length === 0) {
-      alert("No scanned records available to export yet.");
+      showNoticeModal("Export Error", "No scanned records available to export yet.");
       return;
     }
 
-    let csvRows = ["ID,Scan Timestamp"];
-    records.forEach(row => {
-      csvRows.push(`"${row.id}","${row.timestamp}"`);
-    });
+    const container = document.getElementById("modal-container");
+    container.innerHTML = `
+      <div class="modal-overlay">
+        <div class="modal-card">
+          <h3 class="modal-title">Export Format</h3>
+          <div class="modal-body">Choose a format to download the scanned records:</div>
+          <div class="modal-actions">
+            <button class="btn-modal btn-modal-primary" onclick="performExport('csv')">CSV</button>
+            <button class="btn-modal btn-modal-primary" onclick="performExport('txt')">TXT</button>
+          </div>
+          <div class="modal-actions">
+            <button class="btn-modal btn-modal-cancel" onclick="closeModal()">Cancel</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
 
-    const blob = new Blob([csvRows.join("\n")], { type: "text/csv;charset=utf-8;" });
+  function performExport(format) {
+    const records = loadLocalRecords();
+    if (!records || records.length === 0) return;
+
+    let content = "";
+    let mimeType = "";
+    let filename = `attendance_scans_${new Date().toISOString().slice(0,10)}`;
+
+    if (format === 'csv') {
+      let csvRows = ["ID,Scan Timestamp"];
+      records.forEach(row => {
+        csvRows.push(`"${row.id}","${row.timestamp}"`);
+      });
+      content = csvRows.join("\n");
+      mimeType = "text/csv;charset=utf-8;";
+      filename += ".csv";
+    } else if (format === 'txt') {
+      let txtRows = [];
+      records.forEach(row => {
+        txtRows.push(`${row.id}\t${row.timestamp}`);
+      });
+      content = txtRows.join("\n");
+      mimeType = "text/plain;charset=utf-8;";
+      filename += ".txt";
+    }
+
+    const blob = new Blob([content], { type: mimeType });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.setAttribute("href", url);
-    link.setAttribute("download", `attendance_scans_${new Date().toISOString().slice(0,10)}.csv`);
+    link.setAttribute("download", filename);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
+
+    closeModal();
   }
+
+  // ── Camera Initialization ──────────────────────────────────
 
   async function startCamera() {
     html5QrCode = new Html5Qrcode("reader");
