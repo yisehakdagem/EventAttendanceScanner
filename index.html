@@ -180,6 +180,13 @@
       width: 100%;
     }
 
+    .modal-actions-stacked {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      width: 100%;
+    }
+
     .btn-modal {
       flex: 1;
       padding: 12px;
@@ -189,6 +196,7 @@
       cursor: pointer;
       border: none;
       transition: all 0.2s ease;
+      text-align: center;
     }
 
     .btn-modal:active { transform: scale(0.98); }
@@ -203,6 +211,60 @@
       color: var(--text);
       border: 1px solid rgba(255, 255, 255, 0.1);
     }
+
+    .btn-modal-cancel-sm {
+      padding: 8px 12px;
+      font-size: 0.8rem;
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text-muted);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .btn-modal-danger {
+      background: rgba(248, 113, 113, 0.15);
+      color: var(--error-text);
+      border: 1px solid rgba(248, 113, 113, 0.3);
+      padding: 8px 12px;
+      font-size: 0.8rem;
+    }
+
+    .status-icon-container {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .icon-circle {
+      width: 52px;
+      height: 52px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .icon-circle.success {
+      background: rgba(52, 211, 153, 0.15);
+      border: 2px solid var(--success-text);
+    }
+
+    .icon-circle.error {
+      background: rgba(248, 113, 113, 0.15);
+      border: 2px solid var(--error-text);
+    }
+
+    .svg-icon {
+      width: 28px;
+      height: 28px;
+      stroke-width: 3;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      fill: none;
+    }
+
+    .svg-icon.success { stroke: var(--success-text); }
+    .svg-icon.error { stroke: var(--error-text); }
 
     .marked-list {
       max-height: 240px;
@@ -219,8 +281,23 @@
       padding: 10px 12px;
       border-radius: 8px;
       display: flex;
-      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
       font-size: 0.85rem;
+    }
+
+    .marked-item-checkbox {
+      width: 16px;
+      height: 16px;
+      accent-color: var(--primary);
+      cursor: pointer;
+    }
+
+    .marked-item-details {
+      display: flex;
+      justify-content: space-between;
+      flex: 1;
+      align-items: center;
     }
 
     .marked-item-id {
@@ -322,7 +399,7 @@
     isProcessingScan = true;
 
     if (isAlreadyScannedLocally(regId)) {
-      showNoticeModal("Already Scanned", `ID ${regId} has already been scanned locally.`);
+      showAlreadyMarkedModal(regId);
       return;
     }
 
@@ -347,9 +424,9 @@
             Scanned ID: <strong>${regId}</strong><br>
             Do you want to mark attendance for this ID?
           </div>
-          <div class="modal-actions">
+          <div class="modal-actions-stacked">
             <button class="btn-modal btn-modal-primary" onclick="confirmMarkAttendance('${regId}')">Mark Attendance</button>
-            <button class="btn-modal btn-modal-cancel" onclick="closeModal()">Cancel</button>
+            <button class="btn-modal btn-modal-cancel btn-modal-cancel-sm" onclick="closeModal()">Cancel</button>
           </div>
         </div>
       </div>
@@ -365,10 +442,59 @@
     // 2. Dispatch request asynchronously without waiting
     sendCheckInAsync(regId, "process");
 
-    // 3. Update UI and resume scanner
+    // 3. Update UI and show success state dialogue directly without duplicate local checks
     statusDiv.innerText = `Last scanned: ${regId}`;
     statusDiv.className = "status-box";
-    closeModal();
+    showAttendanceMarkedModal(regId);
+  }
+
+  function showAttendanceMarkedModal(regId) {
+    const container = document.getElementById("modal-container");
+    container.innerHTML = `
+      <div class="modal-overlay">
+        <div class="modal-card" style="text-align: center;">
+          <div class="status-icon-container">
+            <div class="icon-circle success">
+              <svg class="svg-icon success" viewBox="0 0 24 24">
+                <polyline points="20 6 9 17 4 12"></polyline>
+              </svg>
+            </div>
+          </div>
+          <h3 class="modal-title">Attendance Marked</h3>
+          <div class="modal-body">
+            Attendance for ID <strong>${regId}</strong> was successfully recorded.
+          </div>
+          <div class="modal-actions">
+            <button class="btn-modal btn-modal-primary" onclick="closeModal()">Close</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function showAlreadyMarkedModal(regId) {
+    const container = document.getElementById("modal-container");
+    container.innerHTML = `
+      <div class="modal-overlay">
+        <div class="modal-card" style="text-align: center;">
+          <div class="status-icon-container">
+            <div class="icon-circle error">
+              <svg class="svg-icon error" viewBox="0 0 24 24">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </div>
+          </div>
+          <h3 class="modal-title">Already Marked</h3>
+          <div class="modal-body">
+            ID <strong>${regId}</strong> has already been scanned locally.
+          </div>
+          <div class="modal-actions">
+            <button class="btn-modal btn-modal-cancel" onclick="closeModal()">Close</button>
+          </div>
+        </div>
+      </div>
+    `;
   }
 
   function showNoticeModal(title, message) {
@@ -394,28 +520,73 @@
     if (records.length === 0) {
       listHtml = `<div class="modal-body">No IDs marked yet.</div>`;
     } else {
-      listHtml = `<div class="marked-list">` + records.map(r => {
+      listHtml = `<div class="marked-list">` + records.map((r, index) => {
         const timeStr = new Date(r.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const recordIndex = records.length - 1 - index; // match display reverse order
+        const rec = records[recordIndex];
         return `
           <div class="marked-item">
-            <span class="marked-item-id">${r.id}</span>
-            <span class="marked-item-time">${timeStr}</span>
+            <input type="checkbox" class="marked-item-checkbox" data-index="${recordIndex}">
+            <div class="marked-item-details">
+              <span class="marked-item-id">${rec.id}</span>
+              <span class="marked-item-time">${timeStr}</span>
+            </div>
           </div>
         `;
-      }).reverse().join('') + `</div>`;
+      }).join('') + `</div>`;
     }
+
+    const clearControlsHtml = records.length > 0 ? `
+      <div class="modal-actions">
+        <button class="btn-modal btn-modal-danger" onclick="confirmClearSelected()">Clear Selected</button>
+        <button class="btn-modal btn-modal-danger" onclick="confirmClearAll()">Clear All</button>
+      </div>
+    ` : '';
 
     container.innerHTML = `
       <div class="modal-overlay">
         <div class="modal-card">
           <h3 class="modal-title">Marked IDs (${records.length})</h3>
           ${listHtml}
+          ${clearControlsHtml}
           <div class="modal-actions">
             <button class="btn-modal btn-modal-cancel" onclick="closeModal()">Close</button>
           </div>
         </div>
       </div>
     `;
+  }
+
+  function confirmClearAll() {
+    const records = loadLocalRecords();
+    if (!records || records.length === 0) return;
+
+    if (confirm("Are you sure you want to delete all marked IDs? This cannot be undone.")) {
+      try {
+        localStorage.removeItem(STORAGE_KEY);
+      } catch (e) {}
+      showMarkedIDsModal();
+    }
+  }
+
+  function confirmClearSelected() {
+    const checkboxes = document.querySelectorAll('.marked-item-checkbox:checked');
+    if (checkboxes.length === 0) {
+      alert("No IDs selected. Please check the boxes next to the IDs you wish to remove.");
+      return;
+    }
+
+    if (confirm(`Are you sure you want to delete ${checkboxes.length} selected ID(s)?`)) {
+      const selectedIndices = Array.from(checkboxes).map(cb => parseInt(cb.getAttribute('data-index'), 10));
+      const records = loadLocalRecords();
+      const updatedRecords = records.filter((_, idx) => !selectedIndices.includes(idx));
+
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedRecords));
+      } catch (e) {}
+
+      showMarkedIDsModal();
+    }
   }
 
   function showExportChoiceModal() {
