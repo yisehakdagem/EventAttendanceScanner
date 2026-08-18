@@ -483,6 +483,24 @@
     if (navigator.onLine && loadPending().length > 0) flushPending();
   }, 30000);
 
+  // ── Scanner Control Helpers ──────────────────────────────────
+
+  function pauseScanner() {
+    if (html5QrCode && html5QrCode.getState() === Html5QrcodeScannerState.SCANNING) {
+      try {
+        html5QrCode.pause(true);
+      } catch (e) {}
+    }
+  }
+
+  function resumeScanner() {
+    if (html5QrCode && html5QrCode.getState() === Html5QrcodeScannerState.PAUSED) {
+      try {
+        html5QrCode.resume();
+      } catch (e) {}
+    }
+  }
+
   // ── QR Scanner Logic ───────────────────────────────────────
 
   function onScanSuccess(decodedText) {
@@ -504,6 +522,7 @@
     if (isProcessingScan) return;
 
     isProcessingScan = true;
+    pauseScanner();
 
     if (isAlreadyScannedLocally(regId)) {
       showAlreadyMarkedModal(regId);
@@ -518,6 +537,7 @@
   const MANUAL_ID_PREFIX = "AYAC26-";
 
   function showManualEntryModal() {
+    pauseScanner();
     const container = document.getElementById("modal-container");
     container.innerHTML = `
       <div class="modal-overlay">
@@ -559,6 +579,9 @@
     }
 
     const fullId = MANUAL_ID_PREFIX + digits;
+    
+    // Temporarily reset flag so processId() can handle this submission
+    isProcessingScan = false;
     processId(fullId);
   }
 
@@ -568,6 +591,7 @@
     const container = document.getElementById("modal-container");
     container.innerHTML = "";
     isProcessingScan = false;
+    resumeScanner();
   }
 
   function showScanConfirmationModal(regId) {
