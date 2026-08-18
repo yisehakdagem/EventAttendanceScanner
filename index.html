@@ -21,7 +21,7 @@
     }
 
     * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-    
+
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       background-color: var(--bg);
@@ -121,124 +121,6 @@
     }
     .file-upload-fallback input { display: none; }
 
-    .modal-overlay {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100vw;
-      height: 100vh;
-      background: rgba(9, 13, 22, 0.85);
-      backdrop-filter: blur(8px);
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      z-index: 9999;
-      opacity: 0;
-      pointer-events: none;
-      transition: opacity 0.25s ease;
-      padding: 20px;
-    }
-
-    .modal-overlay.active {
-      opacity: 1;
-      pointer-events: auto;
-    }
-
-    .modal-card {
-      background: #1e293b;
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      border-radius: 24px;
-      padding: 28px 24px;
-      text-align: center;
-      width: 100%;
-      max-width: 340px;
-      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6);
-      transform: scale(0.9);
-      transition: transform 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-    }
-
-    .modal-overlay.active .modal-card { transform: scale(1); }
-
-    .spinner {
-      width: 48px;
-      height: 48px;
-      border: 4px solid rgba(56, 189, 248, 0.2);
-      border-left-color: var(--primary);
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
-      margin: 0 auto 16px auto;
-    }
-
-    @keyframes spin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
-    }
-
-    .icon-circle {
-      width: 64px;
-      height: 64px;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      margin: 0 auto 16px auto;
-    }
-
-    .icon-circle.success {
-      background: var(--success-bg);
-      border: 2px solid var(--success-text);
-    }
-
-    .icon-circle.error {
-      background: var(--error-bg);
-      border: 2px solid var(--error-text);
-    }
-
-    .modal-title {
-      font-size: 1.25rem;
-      font-weight: 700;
-      color: #ffffff;
-      margin: 0 0 8px 0;
-    }
-
-    .modal-msg {
-      font-size: 0.95rem;
-      color: var(--text-muted);
-      font-weight: 500;
-      margin: 0 0 20px 0;
-      word-break: break-word;
-    }
-
-    .btn-group {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
-
-    .btn {
-      width: 100%;
-      padding: 12px 16px;
-      border-radius: 12px;
-      font-weight: 600;
-      font-size: 0.95rem;
-      border: none;
-      cursor: pointer;
-      transition: all 0.2s ease;
-    }
-
-    .btn-primary { background: var(--primary); color: #0f172a; }
-    .btn-primary:active { transform: scale(0.98); opacity: 0.9; }
-
-    .btn-cancel {
-      background: transparent;
-      color: var(--text-muted);
-      font-size: 0.825rem;
-      padding: 6px 12px;
-      text-decoration: underline;
-      border: none;
-      cursor: pointer;
-    }
-
     #error-banner-container {
       position: fixed;
       bottom: 12px;
@@ -318,183 +200,79 @@
     </div>
   </div>
 
-  <div id="statusModal" class="modal-overlay">
-    <div class="modal-card">
-      <div id="modalIcon"></div>
-      <h3 id="modalTitle" class="modal-title">Checking ID</h3>
-      <p id="modalMsg" class="modal-msg">Verifying with database...</p>
-      
-      <div id="modalActions" class="btn-group" style="display: none;">
-        <button id="btnDone" class="btn btn-primary" onclick="closeModalAndResume()">Done</button>
-        <button id="btnCancel" class="btn btn-cancel" onclick="cancelAttendance()">Don't mark attendance</button>
-      </div>
-    </div>
-  </div>
-
   <div id="error-banner-container"></div>
+
 <script>
   const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzRQYi29sudHW3Ijq327xzFD7YnUHplUlDXTlnsz4rJ2ovObQURDFXlRtKValOLG2c3/exec";
+  const STORAGE_KEY = "ayac_scanned_records";
 
   const statusDiv = document.getElementById("status");
-  const statusModal = document.getElementById("statusModal");
-  const modalIcon = document.getElementById("modalIcon");
-  const modalTitle = document.getElementById("modalTitle");
-  const modalMsg = document.getElementById("modalMsg");
-  const modalActions = document.getElementById("modalActions");
-  const btnCancel = document.getElementById("btnCancel");
-
   let html5QrCode;
-  let isProcessing = false;
-  let currentRegId = "";
 
-  const scannedRecords = [];
+  // ── Local Persistence Helper Functions ─────────────────────
 
-  function showLoadingModal() {
-    modalIcon.innerHTML = `<div class="spinner"></div>`;
-    modalTitle.innerText = "Processing Check-In";
-    modalMsg.innerText = "Updating attendance database...";
-    modalActions.style.display = "none";
-    statusModal.classList.add("active");
-  }
-
-  function showResultModal(message, isSuccess, title = null) {
-    if (isSuccess) {
-      modalIcon.innerHTML = `
-        <div class="icon-circle success">
-          <svg viewBox="0 0 24 24" fill="#34d399" width="32" height="32"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
-        </div>`;
-      modalTitle.innerText = title || "Success";
-      btnCancel.style.display = "block";
-    } else {
-      modalIcon.innerHTML = `
-        <div class="icon-circle error">
-          <svg viewBox="0 0 24 24" fill="#f87171" width="32" height="32"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 13.41 12z"/></svg>
-        </div>`;
-      modalTitle.innerText = title || "Notice";
-      btnCancel.style.display = "none";
-    }
-
-    modalMsg.innerText = message;
-    modalActions.style.display = "flex";
-  }
-
-  function closeModalAndResume() {
-    statusModal.classList.remove("active");
-    if (html5QrCode) {
-      try { html5QrCode.resume(); } catch (e) {}
-    }
-    statusDiv.innerText = "Ready for next scan...";
-    statusDiv.className = "status-box";
-    isProcessing = false;
-    currentRegId = "";
-  }
-
-  async function cancelAttendance() {
-    if (!currentRegId) {
-      closeModalAndResume();
-      return;
-    }
-
-    const recordIdx = scannedRecords.findIndex(r => r.id === currentRegId);
-    if (recordIdx !== -1) scannedRecords.splice(recordIdx, 1);
-
-    showResultModal("Removing attendance entry...", false, "Undoing");
-
+  function loadLocalRecords() {
     try {
-      await sendCheckInRequest(currentRegId, "undo");
-    } catch (err) {}
-
-    setTimeout(() => {
-      closeModalAndResume();
-    }, 1000);
-  }
-
-  function sendCheckInRequest(regId, action = "process") {
-    return new Promise((resolve, reject) => {
-      const callbackName = "jsonp_cb_" + Date.now() + "_" + Math.floor(Math.random() * 10000);
-      const script = document.createElement("script");
-
-      const timeoutId = setTimeout(() => {
-        cleanup();
-        reject("REQUEST_TIMEOUT");
-      }, 20000);
-
-      function cleanup() {
-        clearTimeout(timeoutId);
-        if (window[callbackName]) delete window[callbackName];
-        if (script.parentNode) script.parentNode.removeChild(script);
-      }
-
-      window[callbackName] = function(data) {
-        cleanup();
-        resolve(data);
-      };
-
-      script.onerror = function() {
-        cleanup();
-        reject("Network connection failed");
-      };
-
-      script.src = `${APPS_SCRIPT_URL}?id=${encodeURIComponent(regId)}&action=${action}&callback=${callbackName}&_=${Date.now()}`;
-      document.body.appendChild(script);
-    });
-  }
-
-  async function onScanSuccess(decodedText) {
-    if (isProcessing) return;
-    isProcessing = true;
-
-    if (html5QrCode) {
-      try { html5QrCode.pause(); } catch (e) {}
+      const data = localStorage.getItem(STORAGE_KEY);
+      return data ? JSON.parse(data) : [];
+    } catch (e) {
+      return [];
     }
+  }
 
-    showLoadingModal();
+  function saveLocalRecord(id, timestamp) {
+    const records = loadLocalRecords();
+    records.push({ id: id, timestamp: timestamp });
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+    } catch (e) {}
+  }
 
+  function isAlreadyScannedLocally(id) {
+    const records = loadLocalRecords();
+    return records.some(r => String(r.id).trim().toLowerCase() === String(id).trim().toLowerCase());
+  }
+
+  // ── Fire-and-Forget Network Request ────────────────────────
+
+  function sendCheckInAsync(regId, action = "process") {
+    const targetUrl = `${APPS_SCRIPT_URL}?id=${encodeURIComponent(regId)}&action=${action}&_=${Date.now()}`;
+    
+    if (navigator.sendBeacon) {
+      navigator.sendBeacon(targetUrl);
+    } else {
+      fetch(targetUrl, { mode: 'no-cors' }).catch(() => {});
+    }
+  }
+
+  // ── QR Scanner Logic ───────────────────────────────────────
+
+  function onScanSuccess(decodedText) {
     let regId = decodedText.trim();
     if (regId.includes("id=")) {
       regId = regId.split("id=")[1].split("&")[0];
     }
+    regId = regId.replace(/^["']|["']$/g, '').trim();
 
-    currentRegId = regId;
+    if (!regId) return;
 
-    try {
-      // Execute direct process call to record attendance in one step
-      const response = await sendCheckInRequest(regId, "process");
-      handleCheckInResponse(response, regId);
-    } catch (err) {
-      if (err === "REQUEST_TIMEOUT") {
-        closeModalAndResume();
-        showNotificationBanner(`Check-in timed out for ID ${regId}. Please try scanning again.`, "error");
-      } else {
-        showResultModal(`Connection error: ${err}`, false);
-      }
-    }
-  }
-
-  function handleCheckInResponse(response, regId) {
-    // 1. Explicit Duplicate Catch
-    if (response && response.alreadyCheckedIn === true) {
-      const msg = response.message || `ID ${regId} has already been checked in today.`;
-      showResultModal(msg, false, "Already Checked In");
+    if (isAlreadyScannedLocally(regId)) {
+      showNotificationBanner(`ID ${regId} already scanned locally today.`, "error");
       return;
     }
 
-    // 2. Pure Success Catch
-    if (response && response.success === true) {
-      const timestamp = new Date().toISOString();
-      const personName = response.name || "Student";
-      const verifiedId = response.id || regId;
+    const timestamp = new Date().toISOString();
 
-      scannedRecords.push({ id: verifiedId, name: personName, timestamp: timestamp });
+    // 1. Store locally immediately
+    saveLocalRecord(regId, timestamp);
 
-      const successMsg = response.message || `Attendance marked for ${personName}`;
-      showResultModal(successMsg, true, "Success");
-      return;
-    }
+    // 2. Dispatch request asynchronously without waiting
+    sendCheckInAsync(regId, "process");
 
-    // 3. Fallback Error Catch
-    const errorMsg = (response && response.message) ? response.message : `Failed to process ID ${regId}.`;
-    showResultModal(errorMsg, false, "Error");
+    // 3. Update UI and continue scanning instantly
+    showNotificationBanner(`Scanned ID: ${regId}`, "success");
+    statusDiv.innerText = `Last scanned: ${regId}`;
+    statusDiv.className = "status-box";
   }
 
   function showNotificationBanner(message, type = "error") {
@@ -509,19 +287,19 @@
 
     setTimeout(() => {
       if (banner.parentNode) banner.parentNode.removeChild(banner);
-    }, 6000);
+    }, 3000);
   }
 
   function exportScannedCSV() {
-    if (!scannedRecords || scannedRecords.length === 0) {
+    const records = loadLocalRecords();
+    if (!records || records.length === 0) {
       alert("No scanned records available to export yet.");
       return;
     }
 
-    let csvRows = ["ID,Name,Scan Timestamp"];
-    scannedRecords.forEach(row => {
-      const safeName = (row.name || "Student").replace(/"/g, '""');
-      csvRows.push(`"${row.id}","${safeName}","${row.timestamp}"`);
+    let csvRows = ["ID,Scan Timestamp"];
+    records.forEach(row => {
+      csvRows.push(`"${row.id}","${row.timestamp}"`);
     });
 
     const blob = new Blob([csvRows.join("\n")], { type: "text/csv;charset=utf-8;" });
@@ -565,6 +343,5 @@
       });
   });
 </script>
-  
 </body>
 </html>
