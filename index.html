@@ -309,6 +309,19 @@
       color: var(--text-muted);
       font-size: 0.75rem;
     }
+
+    /* Pending badge */
+    .pending-badge {
+      font-size: 0.65rem;
+      font-weight: 700;
+      background: rgba(251, 191, 36, 0.15);
+      color: #fbbf24;
+      border: 1px solid rgba(251, 191, 36, 0.35);
+      border-radius: 6px;
+      padding: 2px 6px;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
   </style>
 </head>
 <body>
@@ -342,10 +355,12 @@
 <script>
   const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzRQYi29sudHW3Ijq327xzFD7YnUHplUlDXTlnsz4rJ2ovObQURDFXlRtKValOLG2c3/exec";
   const STORAGE_KEY = "ayac_scanned_records";
+  const PENDING_KEY  = "ayac_pending_ids";
 
   const statusDiv = document.getElementById("status");
   let html5QrCode;
   let isProcessingScan = false;
+  let isFlushing = false;
 
   // ── Local Persistence Helper Functions ─────────────────────
 
@@ -360,7 +375,7 @@
 
   function saveLocalRecord(id, timestamp) {
     const records = loadLocalRecords();
-    records.push({ id: id, timestamp: timestamp });
+    records.push({ id, timestamp });
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
     } catch (e) {}
@@ -371,17 +386,103 @@
     return records.some(r => String(r.id).trim().toLowerCase() === String(id).trim().toLowerCase());
   }
 
-  // ── Fire-and-Forget Network Request ────────────────────────
+  // ── Pending Queue Helpers ───────────────────────────────────
 
-  function sendCheckInAsync(regId, action = "process") {
-    const targetUrl = `${APPS_SCRIPT_URL}?id=${encodeURIComponent(regId)}&action=${action}&_=${Date.now()}`;
-    
-    if (navigator.sendBeacon) {
-      navigator.sendBeacon(targetUrl);
-    } else {
-      fetch(targetUrl, { mode: 'no-cors' }).catch(() => {});
+  function loadPending() {
+    try {
+      const data = localStorage.getItem(PENDING_KEY);
+      return data ? JSON.parse(data) : [];
+    } catch (e) {
+      return [];
     }
   }
+
+  function savePending(list) {
+    try {
+      localStorage.setItem(PENDING_KEY, JSON.stringify(list));
+    } catch (e) {}
+  }
+
+  function addPending(id) {
+    const list = loadPending();
+    if (!list.includes(id)) {
+      list.push(id);
+      savePending(list);
+    }
+  }
+
+  function removePending(id) {
+    const list = loadPending().filter(x => x !== id);
+    savePending(list);
+  }
+
+  function isPending(id) {
+    return loadPending().includes(id);
+  }
+
+  // ── Network Send ────────────────────────────────────────────
+
+  // Returns a Promise that resolves true on a best-effort successful send,
+  // false if the device appears to be offline, the request fails, or the
+  // request times out (so it doesn't hang forever on a poor connection).
+  function trySendCheckIn(regId) {
+    return new Promise(resolve => {
+      if (!navigator.onLine) {
+        resolve(false);
+        return;
+      }
+
+      const targetUrl = `${APPS_SCRIPT_URL}?id=${encodeURIComponent(regId)}&_=${Date.now()}`;
+
+      // Abort the request if it takes too long, so a hanging request on a
+      // weak/broken connection doesn't block future retries.
+      const controller = new AbortController();
+      const REQUEST_TIMEOUT_MS = 8000;
+      const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+      // Use fetch (no-cors) — we can't read the response body in no-cors mode,
+      // but a resolved fetch promise means the browser dispatched the request
+      // successfully (i.e. we were online enough to send it).
+      fetch(targetUrl, { mode: 'no-cors', signal: controller.signal })
+        .then(() => {
+          clearTimeout(timeoutId);
+          resolve(true);
+        })
+        .catch(() => {
+          clearTimeout(timeoutId);
+          resolve(false);
+        });
+    });
+  }
+
+  // ── Pending Flush ───────────────────────────────────────────
+
+  async function flushPending() {
+    if (isFlushing) return;
+    const list = loadPending();
+    if (list.length === 0) return;
+
+    isFlushing = true;
+    for (const id of list) {
+      const sent = await trySendCheckIn(id);
+      if (sent) {
+        removePending(id);
+      } else {
+        // Still offline — no point trying the rest right now.
+        break;
+      }
+    }
+    isFlushing = false;
+  }
+
+  // Flush whenever the browser reports we're back online.
+  window.addEventListener("online", () => flushPending());
+
+  // Also attempt a flush every 30 seconds in case the `online` event
+  // is unreliable on some mobile browsers.
+  setInterval(() => {
+    if (navigator.onLine && loadPending().length > 0) flushPending();
+  }, 30000);
 
   // ── QR Scanner Logic ───────────────────────────────────────
 
@@ -433,19 +534,29 @@
     `;
   }
 
-  function confirmMarkAttendance(regId) {
+  async function confirmMarkAttendance(regId) {
     const timestamp = new Date().toISOString();
 
-    // 1. Store locally immediately
+    // 1. Save locally immediately — this is the source of truth.
     saveLocalRecord(regId, timestamp);
 
-    // 2. Dispatch request asynchronously without waiting
-    sendCheckInAsync(regId, "process");
+    // 2. Add to pending queue immediately.
+    //    It will be removed from pending once we confirm a successful send.
+    addPending(regId);
 
-    // 3. Update UI and show success state dialogue directly without duplicate local checks
+    // 3. Update status bar.
     statusDiv.innerText = `Last scanned: ${regId}`;
     statusDiv.className = "status-box";
+
+    // 4. Show the success modal straight away — the user is not kept waiting.
     showAttendanceMarkedModal(regId);
+
+    // 5. Attempt to send in the background.
+    //    If it succeeds, remove from pending. If not, pending flush will retry.
+    const sent = await trySendCheckIn(regId);
+    if (sent) {
+      removePending(regId);
+    }
   }
 
   function showAttendanceMarkedModal(regId) {
@@ -514,27 +625,43 @@
 
   function showMarkedIDsModal() {
     const records = loadLocalRecords();
+    const pending = loadPending();
     const container = document.getElementById("modal-container");
 
     let listHtml = "";
     if (records.length === 0) {
       listHtml = `<div class="modal-body">No IDs marked yet.</div>`;
     } else {
-      listHtml = `<div class="marked-list">` + records.map((r, index) => {
-        const timeStr = new Date(r.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        const recordIndex = records.length - 1 - index; // match display reverse order
-        const rec = records[recordIndex];
+      // Show most-recent first
+      const reversed = [...records].reverse();
+      listHtml = `<div class="marked-list">` + reversed.map((rec, displayIndex) => {
+        const originalIndex = records.length - 1 - displayIndex;
+        const timeStr = new Date(rec.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const isRecPending = pending.includes(rec.id);
+        const pendingBadge = isRecPending
+          ? `<span class="pending-badge">Pending</span>`
+          : '';
         return `
           <div class="marked-item">
-            <input type="checkbox" class="marked-item-checkbox" data-index="${recordIndex}">
+            <input type="checkbox" class="marked-item-checkbox" data-index="${originalIndex}">
             <div class="marked-item-details">
               <span class="marked-item-id">${rec.id}</span>
-              <span class="marked-item-time">${timeStr}</span>
+              <span style="display:flex;align-items:center;gap:6px;">
+                ${pendingBadge}
+                <span class="marked-item-time">${timeStr}</span>
+              </span>
             </div>
           </div>
         `;
       }).join('') + `</div>`;
     }
+
+    const pendingCount = pending.length;
+    const pendingNote = pendingCount > 0
+      ? `<div class="modal-body" style="color:#fbbf24;font-size:0.8rem;margin-top:-8px;">
+           ${pendingCount} ID${pendingCount > 1 ? 's' : ''} waiting to be sent when online.
+         </div>`
+      : '';
 
     const clearControlsHtml = records.length > 0 ? `
       <div class="modal-actions">
@@ -547,6 +674,7 @@
       <div class="modal-overlay">
         <div class="modal-card">
           <h3 class="modal-title">Marked IDs (${records.length})</h3>
+          ${pendingNote}
           ${listHtml}
           ${clearControlsHtml}
           <div class="modal-actions">
@@ -564,6 +692,7 @@
     if (confirm("Are you sure you want to delete all marked IDs? This cannot be undone.")) {
       try {
         localStorage.removeItem(STORAGE_KEY);
+        localStorage.removeItem(PENDING_KEY);
       } catch (e) {}
       showMarkedIDsModal();
     }
@@ -579,8 +708,14 @@
     if (confirm(`Are you sure you want to delete ${checkboxes.length} selected ID(s)?`)) {
       const selectedIndices = Array.from(checkboxes).map(cb => parseInt(cb.getAttribute('data-index'), 10));
       const records = loadLocalRecords();
-      const updatedRecords = records.filter((_, idx) => !selectedIndices.includes(idx));
 
+      // Also remove from pending if the cleared records were pending
+      const pending = loadPending();
+      const removedIds = selectedIndices.map(i => records[i]?.id).filter(Boolean);
+      const newPending = pending.filter(id => !removedIds.includes(id));
+      savePending(newPending);
+
+      const updatedRecords = records.filter((_, idx) => !selectedIndices.includes(idx));
       try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedRecords));
       } catch (e) {}
@@ -684,6 +819,9 @@
         statusDiv.className = "status-box error";
       });
   });
+
+  // Attempt to flush any pending IDs left over from a previous session.
+  flushPending();
 </script>
 </body>
 </html>
