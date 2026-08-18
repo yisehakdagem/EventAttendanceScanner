@@ -548,11 +548,14 @@
     statusDiv.innerText = `Last scanned: ${regId}`;
     statusDiv.className = "status-box";
 
-    // 4. Flash the pressed button green for 0.5s, then close the popup
+    // 4. Flash the whole popup card green for 0.5s, then close the popup
     //    (no separate success modal).
     if (evt && evt.target) {
-      evt.target.style.background = "var(--success-text)";
-      evt.target.style.color = "#000";
+      const card = evt.target.closest('.modal-card');
+      if (card) {
+        card.style.transition = "background 0.05s ease";
+        card.style.background = "var(--success-text)";
+      }
     }
     setTimeout(() => {
       closeModal();
