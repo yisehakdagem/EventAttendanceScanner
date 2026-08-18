@@ -526,7 +526,7 @@
             Do you want to mark attendance for this ID?
           </div>
           <div class="modal-actions-stacked">
-            <button class="btn-modal btn-modal-primary" onclick="confirmMarkAttendance('${regId}')">Mark Attendance</button>
+            <button class="btn-modal btn-modal-primary" onclick="confirmMarkAttendance('${regId}', event)">Mark Attendance</button>
             <button class="btn-modal btn-modal-cancel btn-modal-cancel-sm" onclick="closeModal()">Cancel</button>
           </div>
         </div>
@@ -534,7 +534,7 @@
     `;
   }
 
-  async function confirmMarkAttendance(regId) {
+  async function confirmMarkAttendance(regId, evt) {
     const timestamp = new Date().toISOString();
 
     // 1. Save locally immediately — this is the source of truth.
@@ -548,8 +548,15 @@
     statusDiv.innerText = `Last scanned: ${regId}`;
     statusDiv.className = "status-box";
 
-    // 4. Show the success modal straight away — the user is not kept waiting.
-    showAttendanceMarkedModal(regId);
+    // 4. Flash the pressed button green for 0.5s, then close the popup
+    //    (no separate success modal).
+    if (evt && evt.target) {
+      evt.target.style.background = "var(--success-text)";
+      evt.target.style.color = "#000";
+    }
+    setTimeout(() => {
+      closeModal();
+    }, 500);
 
     // 5. Attempt to send in the background.
     //    If it succeeds, remove from pending. If not, pending flush will retry.
